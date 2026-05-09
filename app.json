@@ -1,0 +1,39 @@
+{
+  "expo": {
+    "name": "Project LEO",
+    "slug": "project-leo",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./src/assets/images/icon.png",
+    "scheme": "projectleo",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "backgroundColor": "#0B5294"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.projectleo.app",
+      "infoPlist": {
+        "NSHealthShareUsageDescription": "Project LEO reads your health data to provide personalized coaching recommendations.",
+        "NSHealthUpdateUsageDescription": "Project LEO records health metrics you log manually."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./src/assets/images/icon.png",
+        "backgroundColor": "#0B5294"
+      },
+      "package": "com.projectleo.app"
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "favicon": "./src/assets/images/favicon.png"
+    },
+    "plugins": ["expo-router", "expo-secure-store"],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
