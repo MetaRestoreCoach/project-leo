@@ -3,11 +3,26 @@
 // ============================================================
 
 import { supabase } from './supabase';
-import { makeRedirectUri } from 'expo-auth-session';
-import * as WebBrowser from 'expo-web-browser';
 import { Platform } from 'react-native';
 
-WebBrowser.maybeCompleteAuthSession();
+// Lazy-load native auth modules only when needed
+let WebBrowser: any = null;
+let makeRedirectUri: any = null;
+
+function loadAuthModules() {
+  if (!WebBrowser) {
+    WebBrowser = require('expo-web-browser');
+    makeRedirectUri = require('expo-auth-session').makeRedirectUri;
+    WebBrowser.maybeCompleteAuthSession();
+  }
+}
+
+// Initialize on import for web (safe) or defer for native
+if (Platform.OS === 'web') {
+  // No-op on web - OAuth uses redirects natively
+} else {
+  loadAuthModules();
+}
 
 // -- Email/Password Auth --
 
@@ -32,7 +47,10 @@ export async function signInWithEmail(email: string, password: string) {
 // -- Google OAuth --
 
 export async function signInWithGoogle() {
-  const redirectTo = makeRedirectUri({ scheme: 'projectleo' });
+  loadAuthModules();
+  const redirectTo = Platform.OS === 'web'
+    ? window.location.origin
+    : makeRedirectUri({ scheme: 'projectleo' });
 
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
@@ -48,7 +66,6 @@ export async function signInWithGoogle() {
   if (Platform.OS !== 'web' && data.url) {
     const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
     if (result.type === 'success' && result.url) {
-      // Extract tokens from the redirect URL
       const url = new URL(result.url);
       const accessToken = url.searchParams.get('access_token') || url.hash?.match(/access_token=([^&]*)/)?.[1];
       const refreshToken = url.searchParams.get('refresh_token') || url.hash?.match(/refresh_token=([^&]*)/)?.[1];
@@ -65,7 +82,10 @@ export async function signInWithGoogle() {
 // -- Apple Sign-In --
 
 export async function signInWithApple() {
-  const redirectTo = makeRedirectUri({ scheme: 'projectleo' });
+  loadAuthModules();
+  const redirectTo = Platform.OS === 'web'
+    ? window.location.origin
+    : makeRedirectUri({ scheme: 'projectleo' });
 
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'apple',

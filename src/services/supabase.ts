@@ -4,12 +4,13 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { Platform } from 'react-native';
-import * as SecureStore from 'expo-secure-store';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key';
 
-// Secure storage adapter for native, localStorage fallback for web
+// Storage adapter: localStorage for web, expo-secure-store for native (lazy-loaded)
+let SecureStore: any = null;
+
 const ExpoSecureStoreAdapter = {
   getItem: async (key: string): Promise<string | null> => {
     if (Platform.OS === 'web') {
@@ -18,6 +19,9 @@ const ExpoSecureStoreAdapter = {
       } catch {
         return null;
       }
+    }
+    if (!SecureStore) {
+      SecureStore = require('expo-secure-store');
     }
     return SecureStore.getItemAsync(key);
   },
@@ -30,6 +34,9 @@ const ExpoSecureStoreAdapter = {
       }
       return;
     }
+    if (!SecureStore) {
+      SecureStore = require('expo-secure-store');
+    }
     await SecureStore.setItemAsync(key, value);
   },
   removeItem: async (key: string): Promise<void> => {
@@ -40,6 +47,9 @@ const ExpoSecureStoreAdapter = {
         // localStorage not available
       }
       return;
+    }
+    if (!SecureStore) {
+      SecureStore = require('expo-secure-store');
     }
     await SecureStore.deleteItemAsync(key);
   },
