@@ -7,6 +7,7 @@ import { Session, User } from '@supabase/supabase-js';
 import { Profile } from '@/types';
 import { supabase } from '@/services/supabase';
 import { getProfile } from '@/services/profile';
+import { Platform } from 'react-native';
 
 interface AuthState {
   session: Session | null;
@@ -31,6 +32,24 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   initialize: async () => {
     try {
+      // On web, check if we're returning from an OAuth callback
+      // detectSessionInUrl is now true, so Supabase will auto-detect hash tokens
+      // But we need to wait for that to complete before checking getSession
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        const hash = window.location.hash;
+        if (hash && (hash.includes('access_token') || hash.includes('refresh_token'))) {
+          // Give Supabase client time to process the hash tokens
+          // The client detects them automatically with detectSessionInUrl: true
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+          // Clean up the URL hash
+          try {
+            window.history.replaceState(null, '', window.location.pathname);
+          } catch (e) {
+            console.warn('Failed to clean URL hash:', e);
+          }
+        }
+      }
+
       const { data: { session } } = await supabase.auth.getSession();
 
       if (session?.user) {
