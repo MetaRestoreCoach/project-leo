@@ -31,11 +31,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   initialize: async () => {
     try {
-      // Get current session
       const { data: { session } } = await supabase.auth.getSession();
 
       if (session?.user) {
-        const profile = await getProfile(session.user.id);
+        let profile = null;
+        try {
+          profile = await getProfile(session.user.id);
+        } catch (e) {
+          console.warn('Profile fetch failed (may not exist yet):', e);
+        }
         set({
           session,
           user: session.user,
@@ -47,17 +51,26 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         set({ isLoading: false, isInitialized: true });
       }
 
-      // Listen for auth changes
+      // Listen for auth changes — errors MUST be caught here
       supabase.auth.onAuthStateChange(async (event, session) => {
-        if (session?.user) {
-          const profile = await getProfile(session.user.id);
-          set({ session, user: session.user, profile });
-        } else {
-          set({ session: null, user: null, profile: null });
+        try {
+          if (session?.user) {
+            let profile = null;
+            try {
+              profile = await getProfile(session.user.id);
+            } catch (e) {
+              console.warn('Profile fetch in listener failed:', e);
+            }
+            set({ session, user: session.user, profile });
+          } else {
+            set({ session: null, user: null, profile: null });
+          }
+        } catch (e) {
+          console.warn('Auth state change error:', e);
         }
       });
     } catch (error) {
-      console.error('Auth initialization error:', error);
+      console.warn('Auth initialization error:', error);
       set({ isLoading: false, isInitialized: true });
     }
   },
@@ -73,13 +86,21 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   refreshProfile: async () => {
     const { user } = get();
     if (user) {
-      const profile = await getProfile(user.id);
-      set({ profile });
+      try {
+        const profile = await getProfile(user.id);
+        set({ profile });
+      } catch (e) {
+        console.warn('Profile refresh failed:', e);
+      }
     }
   },
 
   signOut: async () => {
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut();
+    } catch (e) {
+      console.warn('Sign out error:', e);
+    }
     set({ session: null, user: null, profile: null });
   },
 }));

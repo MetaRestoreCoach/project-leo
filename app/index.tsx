@@ -1,27 +1,23 @@
 import { useEffect } from 'react';
 import { useRouter } from 'expo-router';
-import { useAuthStore } from '@/hooks/useAuthStore';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { Colors } from '@/constants/theme';
 
 export default function Index() {
   const router = useRouter();
-  const { session, profile, isInitialized } = useAuthStore();
 
   useEffect(() => {
-    if (!isInitialized) return;
-
-    if (!session) {
-      // Not logged in -> auth
-      router.replace('/(auth)/login');
-    } else if (!profile?.onboarding_completed) {
-      // Logged in but no profile -> onboarding
-      router.replace('/onboarding/step1');
-    } else {
-      // Fully set up -> dashboard
-      router.replace('/(tabs)/dashboard');
-    }
-  }, [session, profile, isInitialized]);
+    // Always redirect to login on initial load
+    // Auth state will be checked on the login screen itself
+    const timer = setTimeout(() => {
+      try {
+        router.replace('/(auth)/login');
+      } catch (e) {
+        console.warn('Navigation failed:', e);
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, []);
 
   return (
     <View style={styles.container}>
@@ -36,5 +32,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: Colors.background,
+    minHeight: '100vh' as any,
   },
 });
