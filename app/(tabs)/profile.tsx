@@ -2,12 +2,14 @@ import React from 'react';
 import {
   View, Text, ScrollView, StyleSheet, SafeAreaView, TouchableOpacity, useWindowDimensions, Alert,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '@/hooks/useAuthStore';
 import { Card } from '@/components/common/Card';
 import { Button } from '@/components/common/Button';
 import { CONDITION_LABELS, GOAL_LABELS, FOOD_PREF_LABELS, ACTIVITY_LABELS } from '@/constants/labels';
 import { Colors, Spacing, FontSize, FontWeight, BorderRadius } from '@/constants/theme';
+import { getConnectedServices, ConnectedService } from '@/services/appleHealth';
 
 function InfoRow({ label, value, icon }: { label: string; value: string; icon: string }) {
   return (
@@ -38,12 +40,17 @@ export default function ProfileScreen() {
   const { width } = useWindowDimensions();
   const isWide = width > 768;
 
-  const handleSignOut = () => {
-    // Simple confirmation — works on web too
-    signOut();
+  const router = useRouter();
+
+  const handleSignOut = async () => {
+    await signOut();
+    router.replace('/(auth)/login');
   };
 
-  if (!profile) return null;
+  // Show basic info even without full profile (e.g., just signed up via Google)
+  const displayName = profile?.full_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User';
+  const displayEmail = user?.email || '';
+  const initial = displayName.charAt(0).toUpperCase();
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -51,36 +58,67 @@ export default function ProfileScreen() {
         {/* Profile Header */}
         <View style={styles.header}>
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>
-              {profile.full_name?.charAt(0)?.toUpperCase() || '?'}
-            </Text>
+            <Text style={styles.avatarText}>{initial}</Text>
           </View>
-          <Text style={styles.name}>{profile.full_name}</Text>
-          <Text style={styles.email}>{user?.email}</Text>
+          <Text style={styles.name}>{displayName}</Text>
+          <Text style={styles.email}>{displayEmail}</Text>
         </View>
 
         {/* Basic Info */}
-        <Card title="Personal Information" style={styles.section}>
-          <InfoRow label="Age" value={`${profile.age} years`} icon="calendar-outline" />
-          <InfoRow label="Gender" value={profile.gender || 'Not set'} icon="person-outline" />
-          <InfoRow label="Height" value={`${profile.height_cm} cm`} icon="resize-outline" />
-          <InfoRow label="Weight" value={`${profile.weight_kg} kg`} icon="scale-outline" />
-          <InfoRow label="Activity" value={profile.activity_level ? ACTIVITY_LABELS[profile.activity_level] : 'Not set'} icon="walk-outline" />
-        </Card>
+        {profile && (
+          <Card title="Personal Information" style={styles.section}>
+            <InfoRow label="Age" value={profile.age ? `${profile.age} years` : 'Not set'} icon="calendar-outline" />
+            <InfoRow label="Gender" value={profile.gender || 'Not set'} icon="person-outline" />
+            <InfoRow label="Height" value={profile.height_cm ? `${profile.height_cm} cm` : 'Not set'} icon="resize-outline" />
+            <InfoRow label="Weight" value={profile.weight_kg ? `${profile.weight_kg} kg` : 'Not set'} icon="scale-outline" />
+            <InfoRow label="Activity" value={profile.activity_level ? ACTIVITY_LABELS[profile.activity_level] : 'Not set'} icon="walk-outline" />
+          </Card>
+        )}
+
+        {!profile && (
+          <Card title="Complete Your Profile" style={styles.section}>
+            <Text style={{ fontSize: FontSize.sm, color: Colors.textSecondary, marginBottom: Spacing.sm }}>
+              Complete your health profile to get personalized coaching recommendations.
+            </Text>
+            <Button title="Set Up Profile" onPress={() => {}} variant="primary" size="md" />
+          </Card>
+        )}
 
         {/* Health Conditions */}
-        <Card title="Health Conditions" style={styles.section}>
-          <ChipList items={profile.conditions?.map((c) => CONDITION_LABELS[c] || c) || []} />
-        </Card>
+        {profile?.conditions && profile.conditions.length > 0 && (
+          <Card title="Health Conditions" style={styles.section}>
+            <ChipList items={profile.conditions.map((c) => CONDITION_LABELS[c] || c)} />
+          </Card>
+        )}
 
         {/* Goals */}
-        <Card title="Health Goals" style={styles.section}>
-          <ChipList items={profile.goals?.map((g) => GOAL_LABELS[g] || g) || []} />
-        </Card>
+        {profile?.goals && profile.goals.length > 0 && (
+          <Card title="Health Goals" style={styles.section}>
+            <ChipList items={profile.goals.map((g) => GOAL_LABELS[g] || g)} />
+          </Card>
+        )}
 
         {/* Food Preferences */}
-        <Card title="Dietary Preferences" style={styles.section}>
-          <ChipList items={profile.food_preferences?.map((f) => FOOD_PREF_LABELS[f] || f) || []} />
+        {profile?.food_preferences && profile.food_preferences.length > 0 && (
+          <Card title="Dietary Preferences" style={styles.section}>
+            <ChipList items={profile.food_preferences.map((f) => FOOD_PREF_LABELS[f] || f)} />
+          </Card>
+        )}
+
+        {/* Connected Services */}
+        <Card title="Connected Services" style={styles.section}>
+          {getConnectedServices().map((service) => (
+            <TouchableOpacity key={service.id} style={styles.serviceRow}>
+              <Ionicons name={service.icon as any} size={24} color={service.connected ? Colors.accent : Colors.textTertiary} />
+              <View style={styles.serviceInfo}>
+                <Text style={styles.serviceName}>{service.name}</Text>
+                <Text style={styles.serviceStatus}>
+                  {service.connected ? `Connected • ${service.dataTypes.slice(0, 3).join(', ')}` : 'Tap to connect'}
+                </Text>
+              </View>
+              <View style={[styles.statusDot, { backgroundColor: service.connected ? Colors.accent : Colors.border }]} />
+            </TouchableOpacity>
+          ))}
         </Card>
 
         {/* Actions */}
@@ -130,6 +168,14 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.full, backgroundColor: Colors.primary + '10',
   },
   chipText: { fontSize: FontSize.sm, color: Colors.primary, fontWeight: FontWeight.medium },
+  serviceRow: {
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.md,
+    paddingVertical: Spacing.sm, borderBottomWidth: 1, borderBottomColor: Colors.borderLight,
+  },
+  serviceInfo: { flex: 1 },
+  serviceName: { fontSize: FontSize.sm, fontWeight: FontWeight.semibold, color: Colors.textPrimary },
+  serviceStatus: { fontSize: FontSize.xs, color: Colors.textTertiary, marginTop: 2 },
+  statusDot: { width: 10, height: 10, borderRadius: 5 },
   actions: { gap: Spacing.sm, marginTop: Spacing.md },
   version: { fontSize: FontSize.xs, color: Colors.textTertiary, textAlign: 'center', marginTop: Spacing.lg },
 });

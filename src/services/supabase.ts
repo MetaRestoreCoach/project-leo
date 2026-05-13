@@ -60,6 +60,10 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     storage: ExpoSecureStoreAdapter,
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: Platform.OS === 'web', // Must be true on web for OAuth callback
+    // detectSessionInUrl disabled — we handle the OAuth callback explicitly
+    // in app/auth-callback.tsx to avoid race conditions with hash/query parsing.
+    detectSessionInUrl: false,
+    // PKCE is more secure than implicit; works for both web and native.
+    flowType: 'pkce',
   },
 });

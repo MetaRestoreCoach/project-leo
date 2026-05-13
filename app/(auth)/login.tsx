@@ -28,7 +28,7 @@ export default function LoginScreen() {
     setError('');
     try {
       await signInWithEmail(email, password);
-      router.replace('/');
+      router.replace('/(tabs)/dashboard');
     } catch (err: any) {
       setError(err.message || 'Login failed. Please try again.');
     } finally {
@@ -41,7 +41,10 @@ export default function LoginScreen() {
     setError('');
     try {
       await signInWithGoogle();
-      router.replace('/');
+      // On web, OAuth redirect handles navigation via onAuthStateChange
+      if (Platform.OS !== 'web') {
+        router.replace('/(tabs)/dashboard');
+      }
     } catch (err: any) {
       setError(err.message || 'Google sign-in failed.');
     } finally {
@@ -54,7 +57,9 @@ export default function LoginScreen() {
     setError('');
     try {
       await signInWithApple();
-      router.replace('/');
+      if (Platform.OS !== 'web') {
+        router.replace('/(tabs)/dashboard');
+      }
     } catch (err: any) {
       setError(err.message || 'Apple sign-in failed.');
     } finally {

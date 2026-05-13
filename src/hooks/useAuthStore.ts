@@ -7,7 +7,6 @@ import { Session, User } from '@supabase/supabase-js';
 import { Profile } from '@/types';
 import { supabase } from '@/services/supabase';
 import { getProfile } from '@/services/profile';
-import { Platform } from 'react-native';
 
 interface AuthState {
   session: Session | null;
@@ -32,60 +31,39 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   initialize: async () => {
     try {
-      // On web, check if we're returning from an OAuth callback
-      // detectSessionInUrl is now true, so Supabase will auto-detect hash tokens
-      // But we need to wait for that to complete before checking getSession
-      if (Platform.OS === 'web' && typeof window !== 'undefined') {
-        const hash = window.location.hash;
-        if (hash && (hash.includes('access_token') || hash.includes('refresh_token'))) {
-          // Give Supabase client time to process the hash tokens
-          // The client detects them automatically with detectSessionInUrl: true
-          await new Promise((resolve) => setTimeout(resolve, 1000));
-          // Clean up the URL hash
-          try {
-            window.history.replaceState(null, '', window.location.pathname);
-          } catch (e) {
-            console.warn('Failed to clean URL hash:', e);
-          }
-        }
-      }
-
-      const { data: { session } } = await supabase.auth.getSession();
-
-      if (session?.user) {
-        let profile = null;
+      // Register onAuthStateChange FIRST.
+      // Supabase waits for its internal initializePromise (which includes
+      // URL hash / OAuth-callback token processing) before firing any event.
+      // The first event is always INITIAL_SESSION — guaranteed to carry the
+      // correct session even on OAuth redirects. This avoids the race where
+      // getSession() was called before hash tokens were stored, causing the
+      // app to land on the login page instead of the dashboard.
+      supabase.auth.onAuthStateChange(async (event, newSession) => {
         try {
-          profile = await getProfile(session.user.id);
-        } catch (e) {
-          console.warn('Profile fetch failed (may not exist yet):', e);
-        }
-        set({
-          session,
-          user: session.user,
-          profile,
-          isLoading: false,
-          isInitialized: true,
-        });
-      } else {
-        set({ isLoading: false, isInitialized: true });
-      }
-
-      // Listen for auth changes — errors MUST be caught here
-      supabase.auth.onAuthStateChange(async (event, session) => {
-        try {
-          if (session?.user) {
-            let profile = null;
-            try {
-              profile = await getProfile(session.user.id);
-            } catch (e) {
-              console.warn('Profile fetch in listener failed:', e);
+          if (newSession?.user) {
+            const { user: currentUser } = get();
+            // Immediately update session so navigation to dashboard is not delayed
+            set({
+              session: newSession,
+              user: newSession.user,
+              isLoading: false,
+              isInitialized: true,
+            });
+            // Fetch profile in the background (only when user changes)
+            if (currentUser?.id !== newSession.user.id || !get().profile) {
+              try {
+                const profile = await getProfile(newSession.user.id);
+                set({ profile });
+              } catch (e) {
+                console.warn('Profile fetch failed:', e);
+              }
             }
-            set({ session, user: session.user, profile });
           } else {
-            set({ session: null, user: null, profile: null });
+            set({ session: null, user: null, profile: null, isLoading: false, isInitialized: true });
           }
         } catch (e) {
           console.warn('Auth state change error:', e);
+          set({ isLoading: false, isInitialized: true });
         }
       });
     } catch (error) {

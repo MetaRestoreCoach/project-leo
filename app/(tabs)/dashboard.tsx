@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, SafeAreaView, useWindowDimensions, RefreshControl,
 } from 'react-native';
@@ -8,33 +8,51 @@ import { CoachingCard } from '@/components/dashboard/CoachingCard';
 import { GoalProgress } from '@/components/dashboard/GoalProgress';
 import { Card } from '@/components/common/Card';
 import { Colors, Spacing, FontSize, FontWeight } from '@/constants/theme';
-
-// Demo data — replace with real API calls once Supabase is connected
-const DEMO_METRICS = [
-  { title: 'Steps', value: '7,842', unit: 'steps', icon: 'walk-outline' as const, color: Colors.metricSteps, trend: 'up' as const, trendLabel: '+12% vs last week' },
-  { title: 'Heart Rate', value: '72', unit: 'bpm', icon: 'heart-outline' as const, color: Colors.metricHeartRate, trend: 'stable' as const, trendLabel: 'Normal range' },
-  { title: 'Blood Glucose', value: '118', unit: 'mg/dL', icon: 'water-outline' as const, color: Colors.metricGlucose, trend: 'down' as const, trendLabel: '-8 from last week' },
-  { title: 'Sleep', value: '7.2', unit: 'hrs', icon: 'moon-outline' as const, color: Colors.metricSleep, trend: 'up' as const, trendLabel: '+0.5 hrs avg' },
-  { title: 'Weight', value: '78.5', unit: 'kg', icon: 'scale-outline' as const, color: Colors.metricWeight, trend: 'down' as const, trendLabel: '-1.2 kg this month' },
-  { title: 'Blood Pressure', value: '128/82', unit: 'mmHg', icon: 'pulse-outline' as const, color: Colors.metricBloodPressure, trend: 'down' as const, trendLabel: 'Improving' },
-];
+import { getTodaysSummary, DailyHealthSummary } from '@/services/appleHealth';
+import { Ionicons } from '@expo/vector-icons';
 
 const DEMO_COACHING = "Based on your recent data, your post-meal blood glucose tends to spike after lunch. Try adding a 15-minute walk after your midday meal — studies show this can reduce post-prandial glucose by 20-30%. Your sleep has also improved, which is great for insulin sensitivity. This week, focus on increasing fiber intake at breakfast.";
 
+function buildMetrics(data: DailyHealthSummary | null) {
+  if (!data) return [];
+  return [
+    { title: 'Steps', value: data.steps.toLocaleString(), unit: 'steps', icon: 'walk-outline' as const, color: Colors.metricSteps, trend: 'up' as const, trendLabel: `${data.distanceKm} km walked` },
+    { title: 'Heart Rate', value: String(data.heartRateAvg), unit: 'bpm', icon: 'heart-outline' as const, color: Colors.metricHeartRate, trend: 'stable' as const, trendLabel: `${data.heartRateMin}-${data.heartRateMax} range` },
+    { title: 'Blood Glucose', value: '118', unit: 'mg/dL', icon: 'water-outline' as const, color: Colors.metricGlucose, trend: 'down' as const, trendLabel: '-8 from last week' },
+    { title: 'Sleep', value: String(data.sleepHours), unit: 'hrs', icon: 'moon-outline' as const, color: Colors.metricSleep, trend: data.sleepHours >= 7 ? 'up' as const : 'down' as const, trendLabel: data.sleepHours >= 7 ? 'Good rest' : 'Below target' },
+    { title: 'Calories', value: String(data.activeCalories), unit: 'kcal', icon: 'flame-outline' as const, color: Colors.metricWeight, trend: 'up' as const, trendLabel: `${data.restingCalories + data.activeCalories} total` },
+    { title: 'Blood Oxygen', value: data.bloodOxygen ? String(data.bloodOxygen) : '--', unit: '%', icon: 'pulse-outline' as const, color: Colors.metricBloodPressure, trend: 'stable' as const, trendLabel: 'Normal range' },
+  ];
+}
+
 export default function DashboardScreen() {
-  const { profile } = useAuthStore();
+  const { profile, user } = useAuthStore();
   const { width } = useWindowDimensions();
   const isWide = width > 768;
   const [refreshing, setRefreshing] = React.useState(false);
+  const [healthData, setHealthData] = useState<DailyHealthSummary | null>(null);
+
+  const loadHealthData = async () => {
+    try {
+      const data = await getTodaysSummary();
+      setHealthData(data);
+    } catch (e) {
+      console.warn('Failed to load health data:', e);
+    }
+  };
+
+  useEffect(() => {
+    loadHealthData();
+  }, []);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    // TODO: Refresh metrics from Supabase
-    await new Promise((r) => setTimeout(r, 1000));
+    await loadHealthData();
     setRefreshing(false);
   };
 
-  const firstName = profile?.full_name?.split(' ')[0] || 'there';
+  const firstName = profile?.full_name?.split(' ')[0] || user?.user_metadata?.full_name?.split(' ')[0] || user?.email?.split('@')[0] || 'there';
+  const metrics = buildMetrics(healthData);
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -71,10 +89,17 @@ export default function DashboardScreen() {
           generatedAt={new Date().toISOString()}
         />
 
+        {/* Data Source Badge */}
+        <View style={styles.sourceRow}>
+          <Ionicons name="heart-circle" size={16} color={Colors.accent} />
+          <Text style={styles.sourceText}>Data from Apple Health / Demo</Text>
+          <Text style={styles.syncText}>Synced just now</Text>
+        </View>
+
         {/* Metrics Grid */}
         <Text style={styles.sectionTitle}>Your Metrics</Text>
         <View style={[styles.metricsGrid, isWide && styles.metricsGridWide]}>
-          {DEMO_METRICS.map((m) => (
+          {metrics.map((m) => (
             <MetricCard key={m.title} {...m} />
           ))}
         </View>
@@ -83,7 +108,8 @@ export default function DashboardScreen() {
         <Card title="Goal Progress" style={styles.goalsCard}>
           <GoalProgress title="Lower Blood Glucose" current={118} target={100} unit="mg/dL" color={Colors.metricGlucose} />
           <GoalProgress title="Reach 75 kg" current={78.5} target={75} unit="kg" color={Colors.metricWeight} />
-          <GoalProgress title="Walk 10K Steps Daily" current={7842} target={10000} unit="steps" color={Colors.metricSteps} />
+          <GoalProgress title="Walk 10K Steps Daily" current={healthData?.steps || 0} target={10000} unit="steps" color={Colors.metricSteps} />
+          <GoalProgress title="Sleep 7+ Hours" current={healthData?.sleepHours || 0} target={7} unit="hrs" color={Colors.metricSleep} />
         </Card>
 
         {/* Today's Meals */}
@@ -127,6 +153,9 @@ const styles = StyleSheet.create({
   scoreBadge: { flexDirection: 'row', alignItems: 'baseline' },
   scoreValue: { fontSize: 36, fontWeight: FontWeight.bold, color: Colors.accent },
   scoreMax: { fontSize: FontSize.md, color: Colors.textTertiary },
+  sourceRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: Spacing.xs },
+  sourceText: { fontSize: FontSize.xs, color: Colors.textSecondary, flex: 1 },
+  syncText: { fontSize: FontSize.xs, color: Colors.accent },
   sectionTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.semibold, color: Colors.textPrimary, marginTop: Spacing.sm },
   metricsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
   metricsGridWide: { gap: Spacing.md },

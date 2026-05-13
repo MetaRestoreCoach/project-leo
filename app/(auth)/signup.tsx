@@ -85,7 +85,7 @@ export default function SignUpScreen() {
             <Button
               title="Sign up with Google"
               onPress={async () => {
-                try { await signInWithGoogle(); router.replace('/'); } catch {}
+                try { await signInWithGoogle(); if (Platform.OS !== 'web') router.replace('/(tabs)/dashboard'); } catch {}
               }}
               variant="outline"
               icon={<Ionicons name="logo-google" size={20} color={Colors.primary} />}
@@ -94,7 +94,7 @@ export default function SignUpScreen() {
               <Button
                 title="Sign up with Apple"
                 onPress={async () => {
-                  try { await signInWithApple(); router.replace('/'); } catch {}
+                  try { await signInWithApple(); if (Platform.OS !== 'web') router.replace('/(tabs)/dashboard'); } catch {}
                 }}
                 variant="secondary"
                 icon={<Ionicons name="logo-apple" size={20} color={Colors.textPrimary} />}

@@ -47,7 +47,10 @@ export async function signInWithEmail(email: string, password: string) {
 // -- Google OAuth --
 
 export async function signInWithGoogle() {
-  loadAuthModules();
+  if (Platform.OS !== 'web') loadAuthModules();
+
+  // Web: redirect back to the app root — index.tsx detects ?code= and exchanges it.
+  // Native: deep-link back into the app, then exchange the code manually.
   const redirectTo = Platform.OS === 'web'
     ? window.location.origin
     : makeRedirectUri({ scheme: 'projectleo' });
@@ -62,16 +65,14 @@ export async function signInWithGoogle() {
 
   if (error) throw error;
 
-  // On native, open the auth URL in an in-app browser
+  // Native: open the OAuth URL in an in-app browser then exchange the PKCE code.
   if (Platform.OS !== 'web' && data.url) {
     const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
     if (result.type === 'success' && result.url) {
       const url = new URL(result.url);
-      const accessToken = url.searchParams.get('access_token') || url.hash?.match(/access_token=([^&]*)/)?.[1];
-      const refreshToken = url.searchParams.get('refresh_token') || url.hash?.match(/refresh_token=([^&]*)/)?.[1];
-
-      if (accessToken && refreshToken) {
-        await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+      const code = url.searchParams.get('code');
+      if (code) {
+        await supabase.auth.exchangeCodeForSession(code);
       }
     }
   }
@@ -83,6 +84,7 @@ export async function signInWithGoogle() {
 
 export async function signInWithApple() {
   loadAuthModules();
+
   const redirectTo = Platform.OS === 'web'
     ? window.location.origin
     : makeRedirectUri({ scheme: 'projectleo' });
@@ -101,11 +103,9 @@ export async function signInWithApple() {
     const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
     if (result.type === 'success' && result.url) {
       const url = new URL(result.url);
-      const accessToken = url.searchParams.get('access_token') || url.hash?.match(/access_token=([^&]*)/)?.[1];
-      const refreshToken = url.searchParams.get('refresh_token') || url.hash?.match(/refresh_token=([^&]*)/)?.[1];
-
-      if (accessToken && refreshToken) {
-        await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+      const code = url.searchParams.get('code');
+      if (code) {
+        await supabase.auth.exchangeCodeForSession(code);
       }
     }
   }
