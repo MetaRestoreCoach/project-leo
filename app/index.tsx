@@ -1,27 +1,38 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'expo-router';
-import { View, ActivityIndicator, StyleSheet, Platform } from 'react-native';
-import { Colors } from '@/constants/theme';
+import { View, ActivityIndicator, StyleSheet, Platform, Text, TouchableOpacity } from 'react-native';
+import { Colors, FontSize, Spacing } from '@/constants/theme';
 import { useAuthStore } from '@/hooks/useAuthStore';
 import { supabase } from '@/services/supabase';
 
 export default function Index() {
   const router = useRouter();
   const { session, isInitialized } = useAuthStore();
-  // Flag: we are mid-PKCE exchange — don't let the isInitialized effect navigate away.
   const handlingOAuth = useRef(false);
+  const [debugMsg, setDebugMsg] = useState('');
 
   // ── PKCE OAuth callback ──────────────────────────────────────────────────
-  // After Google/Apple sign-in, Supabase redirects to the app root with
-  // ?code=<auth_code>. We exchange it here for a real session.
+  // After Google/Apple sign-in, Supabase redirects here with ?code=
   useEffect(() => {
     if (Platform.OS !== 'web') return;
-    const code = new URLSearchParams(window.location.search).get('code');
+
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
+    const errorParam = params.get('error');
+    const errorDesc = params.get('error_description');
+
+    // Supabase returned an OAuth error (e.g. redirect URL not allowed)
+    if (errorParam) {
+      setDebugMsg(`OAuth error: ${errorParam} — ${errorDesc}`);
+      return;
+    }
+
     if (!code) return;
 
     handlingOAuth.current = true;
+    setDebugMsg('Exchanging code for session…');
 
-    // Remove the code from the URL so a refresh doesn't re-try the exchange.
+    // Remove ?code= from address bar so a refresh doesn't re-try
     const clean = new URL(window.location.href);
     clean.searchParams.delete('code');
     window.history.replaceState({}, '', clean.toString());
@@ -30,23 +41,23 @@ export default function Index() {
       .exchangeCodeForSession(code)
       .then(({ data, error }) => {
         if (error) {
-          console.warn('OAuth code exchange failed:', error.message);
-          router.replace('/(auth)/login');
+          setDebugMsg(`Exchange failed: ${error.message}`);
+          setTimeout(() => router.replace('/(auth)/login'), 3000);
         } else if (data.session) {
           router.replace('/(tabs)/dashboard');
         } else {
-          router.replace('/(auth)/login');
+          setDebugMsg('Exchange succeeded but no session returned');
+          setTimeout(() => router.replace('/(auth)/login'), 3000);
         }
       })
       .catch((e) => {
-        console.warn('OAuth exchange error:', e);
-        router.replace('/(auth)/login');
+        setDebugMsg(`Exchange error: ${e?.message}`);
+        setTimeout(() => router.replace('/(auth)/login'), 3000);
       });
-  }, []); // run once on mount
+  }, []);
 
   // ── Normal session-based routing ─────────────────────────────────────────
   useEffect(() => {
-    // If we're handling an OAuth exchange, don't interfere.
     if (handlingOAuth.current) return;
     if (!isInitialized) return;
 
@@ -66,7 +77,16 @@ export default function Index() {
 
   return (
     <View style={styles.container}>
-      <ActivityIndicator size="large" color={Colors.primary} />
+      {debugMsg ? (
+        <>
+          <Text style={styles.debug}>{debugMsg}</Text>
+          <TouchableOpacity onPress={() => router.replace('/(auth)/login')}>
+            <Text style={styles.link}>Back to Login</Text>
+          </TouchableOpacity>
+        </>
+      ) : (
+        <ActivityIndicator size="large" color={Colors.primary} />
+      )}
     </View>
   );
 }
@@ -78,5 +98,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: Colors.background,
     minHeight: '100vh' as any,
+    padding: Spacing.lg,
+  },
+  debug: {
+    fontSize: FontSize.md,
+    color: Colors.error,
+    textAlign: 'center',
+    marginBottom: Spacing.md,
+  },
+  link: {
+    fontSize: FontSize.sm,
+    color: Colors.primary,
+    textDecorationLine: 'underline',
   },
 });
