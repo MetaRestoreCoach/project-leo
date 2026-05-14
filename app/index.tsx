@@ -1,18 +1,23 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { View, ActivityIndicator, StyleSheet, Platform, Text, TouchableOpacity } from 'react-native';
 import { Colors, FontSize, Spacing } from '@/constants/theme';
 import { useAuthStore } from '@/hooks/useAuthStore';
 import { supabase } from '@/services/supabase';
 
+// Returns true only on web when the URL has a ?code= OAuth callback param.
+// Evaluated once per effect mount — safe to call outside render.
+function isOAuthCallback(): boolean {
+  if (Platform.OS !== 'web') return false;
+  return new URLSearchParams(window.location.search).has('code');
+}
+
 export default function Index() {
   const router = useRouter();
   const { session, isInitialized } = useAuthStore();
-  const handlingOAuth = useRef(false);
   const [debugMsg, setDebugMsg] = useState('');
 
   // ── PKCE OAuth callback ──────────────────────────────────────────────────
-  // After Google/Apple sign-in, Supabase redirects here with ?code=
   useEffect(() => {
     if (Platform.OS !== 'web') return;
 
@@ -21,7 +26,6 @@ export default function Index() {
     const errorParam = params.get('error');
     const errorDesc = params.get('error_description');
 
-    // Supabase returned an OAuth error (e.g. redirect URL not allowed)
     if (errorParam) {
       setDebugMsg(`OAuth error: ${errorParam} — ${errorDesc}`);
       return;
@@ -29,41 +33,39 @@ export default function Index() {
 
     if (!code) return;
 
-    handlingOAuth.current = true;
-
-    // Exchange the PKCE code for a session.
-    // NOTE: Do NOT call window.history.replaceState here — it causes Expo Router
-    // to detect the URL change and remount this component, resetting the
-    // handlingOAuth ref and breaking the async navigation flow.
-    // The successful navigation to /dashboard below naturally clears ?code= from the URL.
     supabase.auth
       .exchangeCodeForSession(code)
-      .then(({ data, error }) => {
-        if (error) {
-          handlingOAuth.current = false;
-          setDebugMsg(`Sign-in failed: ${error.message}`);
-          setTimeout(() => router.replace('/(auth)/login'), 3000);
-        } else if (data.session) {
-          // Use window.location.replace for reliable navigation — it performs a
-          // hard redirect that clears ?code= from the URL and avoids Expo Router
-          // race conditions that can occur with router.replace in async callbacks.
+      .then(async ({ data, error }) => {
+        // Happy path — code exchanged successfully
+        if (!error && data.session) {
+          window.location.replace('/dashboard');
+          return;
+        }
+        // Error or null session (e.g. page refresh with already-used code).
+        // Fall back to checking for an existing session before giving up.
+        const { data: existing } = await supabase.auth.getSession();
+        if (existing.session) {
           window.location.replace('/dashboard');
         } else {
-          handlingOAuth.current = false;
-          setDebugMsg('Sign-in succeeded but no session — please try again.');
+          setDebugMsg(error ? `Sign-in failed: ${error.message}` : 'Sign-in failed — please try again.');
           setTimeout(() => router.replace('/(auth)/login'), 3000);
         }
       })
-      .catch((e) => {
-        handlingOAuth.current = false;
-        setDebugMsg(`Sign-in error: ${e?.message}`);
-        setTimeout(() => router.replace('/(auth)/login'), 3000);
+      .catch(async (e) => {
+        const { data: existing } = await supabase.auth.getSession();
+        if (existing.session) {
+          window.location.replace('/dashboard');
+        } else {
+          setDebugMsg(`Sign-in error: ${e?.message}`);
+          setTimeout(() => router.replace('/(auth)/login'), 3000);
+        }
       });
   }, []);
 
-  // ── Normal session-based routing ─────────────────────────────────────────
+  // ── Normal session-based routing (skipped when handling OAuth callback) ───
   useEffect(() => {
-    if (handlingOAuth.current) return;
+    // Don't interfere while the OAuth effect above is running
+    if (isOAuthCallback()) return;
     if (!isInitialized) return;
 
     const timer = setTimeout(() => {
@@ -79,6 +81,18 @@ export default function Index() {
     }, 300);
     return () => clearTimeout(timer);
   }, [isInitialized, session]);
+
+  // ── Safety net: if auth never initializes, force to login after 8 s ───────
+  useEffect(() => {
+    if (isOAuthCallback()) return; // OAuth flow manages its own timing
+    const fallback = setTimeout(() => {
+      if (!useAuthStore.getState().isInitialized) {
+        console.warn('Auth init timeout — forcing navigation to login');
+        try { router.replace('/(auth)/login'); } catch {}
+      }
+    }, 8000);
+    return () => clearTimeout(fallback);
+  }, []);
 
   return (
     <View style={styles.container}>
