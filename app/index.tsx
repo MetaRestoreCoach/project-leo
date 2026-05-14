@@ -30,28 +30,33 @@ export default function Index() {
     if (!code) return;
 
     handlingOAuth.current = true;
-    setDebugMsg('Exchanging code for session…');
 
-    // Remove ?code= from address bar so a refresh doesn't re-try
-    const clean = new URL(window.location.href);
-    clean.searchParams.delete('code');
-    window.history.replaceState({}, '', clean.toString());
-
+    // Exchange the PKCE code for a session.
+    // NOTE: Do NOT call window.history.replaceState here — it causes Expo Router
+    // to detect the URL change and remount this component, resetting the
+    // handlingOAuth ref and breaking the async navigation flow.
+    // The successful navigation to /dashboard below naturally clears ?code= from the URL.
     supabase.auth
       .exchangeCodeForSession(code)
       .then(({ data, error }) => {
         if (error) {
-          setDebugMsg(`Exchange failed: ${error.message}`);
+          handlingOAuth.current = false;
+          setDebugMsg(`Sign-in failed: ${error.message}`);
           setTimeout(() => router.replace('/(auth)/login'), 3000);
         } else if (data.session) {
-          router.replace('/(tabs)/dashboard');
+          // Use window.location.replace for reliable navigation — it performs a
+          // hard redirect that clears ?code= from the URL and avoids Expo Router
+          // race conditions that can occur with router.replace in async callbacks.
+          window.location.replace('/dashboard');
         } else {
-          setDebugMsg('Exchange succeeded but no session returned');
+          handlingOAuth.current = false;
+          setDebugMsg('Sign-in succeeded but no session — please try again.');
           setTimeout(() => router.replace('/(auth)/login'), 3000);
         }
       })
       .catch((e) => {
-        setDebugMsg(`Exchange error: ${e?.message}`);
+        handlingOAuth.current = false;
+        setDebugMsg(`Sign-in error: ${e?.message}`);
         setTimeout(() => router.replace('/(auth)/login'), 3000);
       });
   }, []);
