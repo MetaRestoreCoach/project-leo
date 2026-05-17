@@ -5,44 +5,50 @@ import { Colors, FontSize, Spacing } from '@/constants/theme';
 import { useAuthStore } from '@/hooks/useAuthStore';
 import { supabase } from '@/services/supabase';
 
-// Returns true only on web when the URL has a ?code= OAuth callback param.
-// Evaluated once per effect mount — safe to call outside render.
-function isOAuthCallback(): boolean {
-  if (Platform.OS !== 'web') return false;
-  return new URLSearchParams(window.location.search).has('code');
-}
-
 export default function Index() {
   const router = useRouter();
   const { session, isInitialized } = useAuthStore();
   const [debugMsg, setDebugMsg] = useState('');
 
+  // ── Capture URL params SYNCHRONOUSLY during first render ─────────────────
+  // Must be read before Expo Router calls history.replaceState and cleans the URL.
+  // useState lazy initializer runs synchronously on mount, before any effects.
+  const [oauthCode] = useState<string | null>(() => {
+    if (Platform.OS !== 'web') return null;
+    try { return new URLSearchParams(window.location.search).get('code'); } catch { return null; }
+  });
+  const [oauthErrorParam] = useState<string | null>(() => {
+    if (Platform.OS !== 'web') return null;
+    try {
+      const p = new URLSearchParams(window.location.search);
+      const err = p.get('error');
+      return err ? `${err} — ${p.get('error_description') ?? ''}` : null;
+    } catch { return null; }
+  });
+
+  // True whenever this mount is handling an OAuth redirect
+  const isOAuthFlow = !!(oauthCode || oauthErrorParam);
+
   // ── PKCE OAuth callback ──────────────────────────────────────────────────
   useEffect(() => {
     if (Platform.OS !== 'web') return;
 
-    const params = new URLSearchParams(window.location.search);
-    const code = params.get('code');
-    const errorParam = params.get('error');
-    const errorDesc = params.get('error_description');
-
-    if (errorParam) {
-      setDebugMsg(`OAuth error: ${errorParam} — ${errorDesc}`);
+    if (oauthErrorParam) {
+      setDebugMsg(`OAuth error: ${oauthErrorParam}`);
       return;
     }
 
-    if (!code) return;
+    if (!oauthCode) return;
 
     supabase.auth
-      .exchangeCodeForSession(code)
+      .exchangeCodeForSession(oauthCode)
       .then(async ({ data, error }) => {
-        // Happy path — code exchanged successfully
         if (!error && data.session) {
+          // Success — navigate to dashboard via full reload so Expo Router picks up the session
           window.location.replace('/dashboard');
           return;
         }
-        // Error or null session (e.g. page refresh with already-used code).
-        // Fall back to checking for an existing session before giving up.
+        // Code already used (e.g. page refresh) — check for an existing session
         const { data: existing } = await supabase.auth.getSession();
         if (existing.session) {
           window.location.replace('/dashboard');
@@ -60,12 +66,12 @@ export default function Index() {
           setTimeout(() => router.replace('/(auth)/login'), 3000);
         }
       });
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // oauthCode is captured once on mount — stable reference
 
-  // ── Normal session-based routing (skipped when handling OAuth callback) ───
+  // ── Normal session-based routing ──────────────────────────────────────────
   useEffect(() => {
-    // Don't interfere while the OAuth effect above is running
-    if (isOAuthCallback()) return;
+    if (isOAuthFlow) return; // OAuth effect manages navigation
     if (!isInitialized) return;
 
     const timer = setTimeout(() => {
@@ -80,11 +86,11 @@ export default function Index() {
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [isInitialized, session]);
+  }, [isInitialized, session, isOAuthFlow]);
 
-  // ── Safety net: if auth never initializes, force to login after 8 s ───────
+  // ── Safety net: force login if auth never initializes after 8 s ───────────
   useEffect(() => {
-    if (isOAuthCallback()) return; // OAuth flow manages its own timing
+    if (isOAuthFlow) return; // OAuth manages its own timing
     const fallback = setTimeout(() => {
       if (!useAuthStore.getState().isInitialized) {
         console.warn('Auth init timeout — forcing navigation to login');
@@ -92,7 +98,8 @@ export default function Index() {
       }
     }, 8000);
     return () => clearTimeout(fallback);
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // isOAuthFlow is stable (captured from state)
 
   return (
     <View style={styles.container}>

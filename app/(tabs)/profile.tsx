@@ -5,6 +5,7 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '@/hooks/useAuthStore';
+import { UserAvatar } from '@/components/common/UserAvatar';
 import { Card } from '@/components/common/Card';
 import { Button } from '@/components/common/Button';
 import { CONDITION_LABELS, GOAL_LABELS, FOOD_PREF_LABELS, ACTIVITY_LABELS } from '@/constants/labels';
@@ -50,16 +51,19 @@ export default function ProfileScreen() {
   // Show basic info even without full profile (e.g., just signed up via Google)
   const displayName = profile?.full_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User';
   const displayEmail = user?.email || '';
-  const initial = displayName.charAt(0).toUpperCase();
+  const avatarUrl = user?.user_metadata?.avatar_url || user?.user_metadata?.picture || profile?.avatar_url || null;
 
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={[styles.content, isWide && styles.contentWide]}>
         {/* Profile Header */}
         <View style={styles.header}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{initial}</Text>
-          </View>
+          <UserAvatar
+            name={displayName}
+            avatarUrl={avatarUrl}
+            size={88}
+            borderColor={Colors.primary}
+          />
           <Text style={styles.name}>{displayName}</Text>
           <Text style={styles.email}>{displayEmail}</Text>
         </View>
@@ -146,12 +150,7 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.background },
   content: { padding: Spacing.md },
   contentWide: { maxWidth: 600, alignSelf: 'center', width: '100%' },
-  header: { alignItems: 'center', marginBottom: Spacing.xl, marginTop: Spacing.lg },
-  avatar: {
-    width: 80, height: 80, borderRadius: 40, backgroundColor: Colors.primary,
-    justifyContent: 'center', alignItems: 'center', marginBottom: Spacing.md,
-  },
-  avatarText: { fontSize: 32, fontWeight: FontWeight.bold, color: Colors.white },
+  header: { alignItems: 'center', marginBottom: Spacing.xl, marginTop: Spacing.lg, gap: Spacing.sm },
   name: { fontSize: FontSize.xl, fontWeight: FontWeight.bold, color: Colors.textPrimary },
   email: { fontSize: FontSize.sm, color: Colors.textSecondary, marginTop: 2 },
   section: { marginBottom: Spacing.md, padding: Spacing.md },

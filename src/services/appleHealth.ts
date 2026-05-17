@@ -63,58 +63,43 @@ export async function requestHealthPermissions(): Promise<boolean> {
   }
 }
 
-// Generate realistic demo data for the last 7 days
+// Generate realistic demo data — seeded by date so values are stable on re-render
+function demoForDate(date: Date): DailyHealthSummary {
+  const seed = date.getDate() + date.getMonth() * 31;
+  const baseSteps = 7500 + ((seed * 7919) % 4000);
+  const baseHR = 68 + (seed % 12);
+  const baseSleep = 6.5 + (seed % 20) / 10;
+  return {
+    date: date.toISOString().split('T')[0],
+    steps: Math.round(baseSteps),
+    heartRateAvg: Math.round(baseHR),
+    heartRateMin: Math.round(baseHR - 14),
+    heartRateMax: Math.round(baseHR + 32),
+    sleepHours: Math.round(baseSleep * 10) / 10,
+    activeCalories: Math.round(250 + (seed % 300)),
+    restingCalories: Math.round(1600 + (seed % 200)),
+    distanceKm: Math.round((baseSteps * 0.0007) * 10) / 10,
+    flightsClimbed: 4 + (seed % 12),
+    bloodOxygen: Math.round((96 + (seed % 30) / 10) * 10) / 10,
+    respiratoryRate: Math.round((14 + (seed % 40) / 10) * 10) / 10,
+  };
+}
+
 function generateDemoData(): DailyHealthSummary[] {
-  const data: DailyHealthSummary[] = [];
-  const now = new Date();
-
-  for (let i = 6; i >= 0; i--) {
-    const date = new Date(now);
-    date.setDate(date.getDate() - i);
-
-    // Generate realistic values with some variance
-    const baseSteps = 7500 + Math.random() * 4000;
-    const baseHR = 68 + Math.random() * 10;
-    const baseSleep = 6.5 + Math.random() * 2;
-
-    data.push({
-      date: date.toISOString().split('T')[0],
-      steps: Math.round(baseSteps),
-      heartRateAvg: Math.round(baseHR),
-      heartRateMin: Math.round(baseHR - 12 - Math.random() * 5),
-      heartRateMax: Math.round(baseHR + 30 + Math.random() * 20),
-      sleepHours: Math.round(baseSleep * 10) / 10,
-      activeCalories: Math.round(250 + Math.random() * 300),
-      restingCalories: Math.round(1600 + Math.random() * 200),
-      distanceKm: Math.round((baseSteps * 0.0007) * 10) / 10,
-      flightsClimbed: Math.round(4 + Math.random() * 12),
-      bloodOxygen: Math.round((96 + Math.random() * 3) * 10) / 10,
-      respiratoryRate: Math.round((14 + Math.random() * 4) * 10) / 10,
-    });
-  }
-
-  return data;
+  return Array.from({ length: 7 }, (_, i) => {
+    const date = new Date();
+    date.setDate(date.getDate() - (6 - i));
+    return demoForDate(date);
+  });
 }
 
-// Get today's health summary
+// Get today's health summary (web/demo fallback)
 export async function getTodaysSummary(): Promise<DailyHealthSummary> {
-  if (isHealthKitAvailable()) {
-    // TODO: Replace with real HealthKit queries
-    // const AppleHealthKit = require('react-native-health').default;
-    // ... query HealthKit for today's data
-  }
-
-  // Return demo data for today
-  const allData = generateDemoData();
-  return allData[allData.length - 1];
+  return demoForDate(new Date());
 }
 
-// Get health data for last N days
+// Get health data for last 7 days (web/demo fallback)
 export async function getWeeklyData(): Promise<DailyHealthSummary[]> {
-  if (isHealthKitAvailable()) {
-    // TODO: Replace with real HealthKit queries
-  }
-
   return generateDemoData();
 }
 

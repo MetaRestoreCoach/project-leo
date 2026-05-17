@@ -3,6 +3,7 @@ import {
   View, Text, ScrollView, StyleSheet, SafeAreaView, useWindowDimensions, RefreshControl,
 } from 'react-native';
 import { useAuthStore } from '@/hooks/useAuthStore';
+import { UserAvatar } from '@/components/common/UserAvatar';
 import { MetricCard } from '@/components/dashboard/MetricCard';
 import { CoachingCard } from '@/components/dashboard/CoachingCard';
 import { GoalProgress } from '@/components/dashboard/GoalProgress';
@@ -52,6 +53,9 @@ export default function DashboardScreen() {
   };
 
   const firstName = profile?.full_name?.split(' ')[0] || user?.user_metadata?.full_name?.split(' ')[0] || user?.email?.split('@')[0] || 'there';
+  const displayName = profile?.full_name || user?.user_metadata?.full_name || firstName;
+  const avatarUrl = user?.user_metadata?.avatar_url || user?.user_metadata?.picture || profile?.avatar_url || null;
+  const timeOfDay = new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening';
   const metrics = buildMetrics(healthData);
 
   return (
@@ -63,10 +67,18 @@ export default function DashboardScreen() {
       >
         {/* Greeting */}
         <View style={styles.greeting}>
-          <Text style={styles.greetingText}>
-            Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}, {firstName}
-          </Text>
-          <Text style={styles.greetingSub}>Here's your health snapshot</Text>
+          <View style={styles.greetingRow}>
+            <UserAvatar
+              name={displayName}
+              avatarUrl={avatarUrl}
+              size={48}
+              borderColor={Colors.primary}
+            />
+            <View style={styles.greetingText}>
+              <Text style={styles.greetingHeadline}>Good {timeOfDay}, {firstName}</Text>
+              <Text style={styles.greetingSub}>Here's your health snapshot</Text>
+            </View>
+          </View>
         </View>
 
         {/* Health Score */}
@@ -144,7 +156,9 @@ const styles = StyleSheet.create({
   content: { padding: Spacing.md, gap: Spacing.md },
   contentWide: { maxWidth: 800, alignSelf: 'center', width: '100%' },
   greeting: { marginBottom: Spacing.xs },
-  greetingText: { fontSize: FontSize.xl, fontWeight: FontWeight.bold, color: Colors.textPrimary },
+  greetingRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
+  greetingText: { flex: 1 },
+  greetingHeadline: { fontSize: FontSize.xl, fontWeight: FontWeight.bold, color: Colors.textPrimary },
   greetingSub: { fontSize: FontSize.sm, color: Colors.textSecondary, marginTop: 2 },
   scoreCard: { padding: Spacing.md },
   scoreRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
