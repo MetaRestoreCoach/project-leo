@@ -60,9 +60,9 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     storage: ExpoSecureStoreAdapter,
     autoRefreshToken: true,
     persistSession: true,
-    // detectSessionInUrl disabled — we handle the OAuth callback explicitly
-    // in app/auth-callback.tsx to avoid race conditions with hash/query parsing.
-    detectSessionInUrl: false,
+    // Let Supabase auto-detect and exchange the ?code= param on web.
+    // onAuthStateChange fires SIGNED_IN → useAuthStore picks up session → dashboard.
+    detectSessionInUrl: Platform.OS === 'web',
     // PKCE is more secure than implicit; works for both web and native.
     flowType: 'pkce',
   },
