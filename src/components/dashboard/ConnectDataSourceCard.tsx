@@ -12,6 +12,7 @@ interface Integration {
   color: string;
   description: string;
   iosOnly?: boolean;
+  note?: string; // If set, tapping shows this info instead of connect flow
 }
 
 const INTEGRATIONS: Integration[] = [
@@ -36,6 +37,7 @@ const INTEGRATIONS: Integration[] = [
     icon: 'restaurant-outline',
     color: '#00B0FF',
     description: 'Nutrition & food logging',
+    note: 'MyFitnessPal retired their public API in 2020. Use the in-app food logging feature to track nutrition manually.',
   },
   {
     id: 'strava',
@@ -52,21 +54,21 @@ interface Props {
 }
 
 export function ConnectDataSourceCard({ connectedIds = [], onConnect }: Props) {
-  const visible = INTEGRATIONS.filter(
-    (i) => !i.iosOnly || Platform.OS === 'ios',
-  );
-
   const handleConnect = (integration: Integration) => {
-    if (connectedIds.includes(integration.id)) return;
+    const isIosOnly = !!(integration.iosOnly && Platform.OS !== 'ios');
+    if (isIosOnly || connectedIds.includes(integration.id)) return;
+
+    if (integration.note) {
+      Alert.alert(integration.name, integration.note);
+      return;
+    }
+
     Alert.alert(
       `Connect ${integration.name}`,
-      `Linking ${integration.name} will import your real health data and replace the sample metrics on your dashboard.`,
+      `Linking ${integration.name} will import your health data and replace sample metrics on your dashboard.`,
       [
         { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Connect',
-          onPress: () => onConnect(integration.id),
-        },
+        { text: 'Connect', onPress: () => onConnect(integration.id) },
       ],
     );
   };
@@ -84,23 +86,30 @@ export function ConnectDataSourceCard({ connectedIds = [], onConnect }: Props) {
       </View>
 
       <View style={styles.grid}>
-        {visible.map((integration) => {
+        {INTEGRATIONS.map((integration) => {
           const connected = connectedIds.includes(integration.id);
+          const isIosOnly = !!(integration.iosOnly && Platform.OS !== 'ios');
+          const isUnavailable = !!integration.note;
+          const pillLabel = connected ? '✓ Connected' : isIosOnly ? 'iOS only' : isUnavailable ? 'Info' : 'Connect';
+
           return (
             <TouchableOpacity
               key={integration.id}
-              style={[styles.item, connected && styles.itemConnected]}
+              style={[styles.item, connected && styles.itemConnected, isIosOnly && styles.itemDisabled]}
               onPress={() => handleConnect(integration)}
-              activeOpacity={0.75}
+              activeOpacity={isIosOnly ? 1 : 0.75}
+              disabled={isIosOnly}
             >
-              <View style={[styles.iconWrap, { backgroundColor: integration.color + '18' }]}>
-                <Ionicons name={integration.icon} size={22} color={integration.color} />
+              <View style={[styles.iconWrap, { backgroundColor: integration.color + (isIosOnly ? '0C' : '18') }]}>
+                <Ionicons name={integration.icon} size={22} color={isIosOnly ? Colors.textTertiary : integration.color} />
               </View>
-              <Text style={styles.itemName}>{integration.name}</Text>
-              <Text style={styles.itemDesc} numberOfLines={2}>{integration.description}</Text>
-              <View style={[styles.pill, connected && styles.pillConnected]}>
-                <Text style={[styles.pillText, connected && styles.pillTextConnected]}>
-                  {connected ? '✓ Connected' : 'Connect'}
+              <Text style={[styles.itemName, isIosOnly && styles.textDisabled]}>{integration.name}</Text>
+              <Text style={styles.itemDesc} numberOfLines={2}>
+                {isIosOnly ? 'Available on iPhone only' : integration.description}
+              </Text>
+              <View style={[styles.pill, connected && styles.pillConnected, (isIosOnly || isUnavailable) && styles.pillGhost]}>
+                <Text style={[styles.pillText, connected && styles.pillTextConnected, (isIosOnly || isUnavailable) && styles.pillTextGhost]}>
+                  {pillLabel}
                 </Text>
               </View>
             </TouchableOpacity>
@@ -201,5 +210,19 @@ const styles = StyleSheet.create({
   },
   pillTextConnected: {
     color: Colors.white,
+  },
+  pillGhost: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  pillTextGhost: {
+    color: Colors.textTertiary,
+  },
+  itemDisabled: {
+    opacity: 0.5,
+  },
+  textDisabled: {
+    color: Colors.textTertiary,
   },
 });

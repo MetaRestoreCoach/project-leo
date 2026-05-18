@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
-  View, Text, ScrollView, StyleSheet, SafeAreaView, useWindowDimensions, RefreshControl, Alert,
+  View, Text, ScrollView, StyleSheet, SafeAreaView, useWindowDimensions, RefreshControl,
 } from 'react-native';
 import { useAuthStore } from '@/hooks/useAuthStore';
 import { UserAvatar } from '@/components/common/UserAvatar';
@@ -56,12 +56,15 @@ export default function DashboardScreen() {
 
   const handleConnect = (id: string) => {
     setConnectedSources((prev) => [...prev, id]);
-    Alert.alert(
-      'Integration Coming Soon',
-      "We're building this integration now. You'll be notified when it's ready to sync your real health data.",
-      [{ text: 'Got it' }],
-    );
+    if (id === 'apple_health') {
+      loadHealthData();
+    }
   };
+
+  const hasData = connectedSources.length > 0;
+  const sourceLabel = connectedSources.length > 0
+    ? connectedSources.map((s) => ({ apple_health: 'Apple Health', google_fit: 'Google Fit', strava: 'Strava', myfitnesspal: 'MyFitnessPal' }[s] ?? s)).join(', ')
+    : 'Demo';
 
   const firstName = profile?.full_name?.split(' ')[0] || user?.user_metadata?.full_name?.split(' ')[0] || user?.email?.split('@')[0] || 'there';
   const displayName = profile?.full_name || user?.user_metadata?.full_name || firstName;
@@ -98,73 +101,86 @@ export default function DashboardScreen() {
           onConnect={handleConnect}
         />
 
-        {/* Health Score */}
-        <Card style={styles.scoreCard}>
-          <View style={styles.scoreRow}>
-            <View>
-              <Text style={styles.scoreLabel}>Health Score</Text>
-              <Text style={styles.scoreSub}>Based on your last 7 days</Text>
+        {/* Empty state — shown when nothing is connected */}
+        {!hasData && (
+          <View style={styles.emptyState}>
+            <Ionicons name="analytics-outline" size={52} color={Colors.textTertiary} />
+            <Text style={styles.emptyTitle}>No data connected yet</Text>
+            <Text style={styles.emptyDesc}>
+              Connect a health source above to see your real metrics, coaching insights, and goal progress.
+            </Text>
+          </View>
+        )}
+
+        {/* All data sections — only when at least one source is connected */}
+        {hasData && (
+          <>
+            {/* Health Score */}
+            <Card style={styles.scoreCard}>
+              <View style={styles.scoreRow}>
+                <View>
+                  <Text style={styles.scoreLabel}>Health Score</Text>
+                  <Text style={styles.scoreSub}>Based on your last 7 days</Text>
+                </View>
+                <View style={styles.scoreBadge}>
+                  <Text style={styles.scoreValue}>74</Text>
+                  <Text style={styles.scoreMax}>/100</Text>
+                </View>
+              </View>
+            </Card>
+
+            {/* Coaching Card */}
+            <CoachingCard
+              summary={DEMO_COACHING}
+              generatedAt={new Date().toISOString()}
+            />
+
+            {/* Data Source Badge */}
+            <View style={styles.sourceRow}>
+              <Ionicons name="heart-circle" size={16} color={Colors.accent} />
+              <Text style={styles.sourceText}>Data from {sourceLabel}</Text>
+              <Text style={styles.syncText}>Synced just now</Text>
             </View>
-            <View style={styles.scoreBadge}>
-              <Text style={styles.scoreValue}>74</Text>
-              <Text style={styles.scoreMax}>/100</Text>
+
+            {/* Metrics Grid */}
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Your Metrics</Text>
             </View>
-          </View>
-        </Card>
+            <View style={[styles.metricsGrid, isWide && styles.metricsGridWide]}>
+              {metrics.map((m) => (
+                <MetricCard key={m.title} {...m} />
+              ))}
+            </View>
 
-        {/* Coaching Card */}
-        <CoachingCard
-          summary={DEMO_COACHING}
-          generatedAt={new Date().toISOString()}
-        />
+            {/* Goal Progress */}
+            <Card title="Goal Progress" style={styles.goalsCard}>
+              <GoalProgress title="Lower Blood Glucose" current={118} target={100} unit="mg/dL" color={Colors.metricGlucose} />
+              <GoalProgress title="Reach 75 kg" current={78.5} target={75} unit="kg" color={Colors.metricWeight} />
+              <GoalProgress title="Walk 10K Steps Daily" current={healthData?.steps || 0} target={10000} unit="steps" color={Colors.metricSteps} />
+              <GoalProgress title="Sleep 7+ Hours" current={healthData?.sleepHours || 0} target={7} unit="hrs" color={Colors.metricSleep} />
+            </Card>
 
-        {/* Data Source Badge */}
-        <View style={styles.sourceRow}>
-          <Ionicons name="heart-circle" size={16} color={Colors.accent} />
-          <Text style={styles.sourceText}>Data from Apple Health / Demo</Text>
-          <Text style={styles.syncText}>Synced just now</Text>
-        </View>
-
-        {/* Metrics Grid */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Your Metrics</Text>
-          <View style={styles.sampleBadge}>
-            <Text style={styles.sampleBadgeText}>Sample Data</Text>
-          </View>
-        </View>
-        <View style={[styles.metricsGrid, isWide && styles.metricsGridWide]}>
-          {metrics.map((m) => (
-            <MetricCard key={m.title} {...m} />
-          ))}
-        </View>
-
-        {/* Goal Progress */}
-        <Card title="Goal Progress" style={styles.goalsCard}>
-          <GoalProgress title="Lower Blood Glucose" current={118} target={100} unit="mg/dL" color={Colors.metricGlucose} />
-          <GoalProgress title="Reach 75 kg" current={78.5} target={75} unit="kg" color={Colors.metricWeight} />
-          <GoalProgress title="Walk 10K Steps Daily" current={healthData?.steps || 0} target={10000} unit="steps" color={Colors.metricSteps} />
-          <GoalProgress title="Sleep 7+ Hours" current={healthData?.sleepHours || 0} target={7} unit="hrs" color={Colors.metricSleep} />
-        </Card>
-
-        {/* Today's Meals */}
-        <Card title="Today's Meals" style={styles.mealsCard}>
-          <View style={styles.mealRow}>
-            <Text style={styles.mealType}>Breakfast</Text>
-            <Text style={styles.mealDesc}>Oatmeal with berries, chia seeds</Text>
-            <Text style={styles.mealCal}>320 kcal</Text>
-          </View>
-          <View style={styles.mealDivider} />
-          <View style={styles.mealRow}>
-            <Text style={styles.mealType}>Lunch</Text>
-            <Text style={styles.mealDesc}>Grilled chicken salad, olive oil dressing</Text>
-            <Text style={styles.mealCal}>480 kcal</Text>
-          </View>
-          <View style={styles.mealDivider} />
-          <View style={styles.mealRow}>
-            <Text style={[styles.mealType, { color: Colors.textTertiary }]}>Dinner</Text>
-            <Text style={[styles.mealDesc, { color: Colors.textTertiary, fontStyle: 'italic' }]}>Not logged yet</Text>
-          </View>
-        </Card>
+            {/* Today's Meals */}
+            <Card title="Today's Meals" style={styles.mealsCard}>
+              <View style={styles.mealRow}>
+                <Text style={styles.mealType}>Breakfast</Text>
+                <Text style={styles.mealDesc}>Oatmeal with berries, chia seeds</Text>
+                <Text style={styles.mealCal}>320 kcal</Text>
+              </View>
+              <View style={styles.mealDivider} />
+              <View style={styles.mealRow}>
+                <Text style={styles.mealType}>Lunch</Text>
+                <Text style={styles.mealDesc}>Grilled chicken salad, olive oil dressing</Text>
+                <Text style={styles.mealCal}>480 kcal</Text>
+              </View>
+              <View style={styles.mealDivider} />
+              <View style={styles.mealRow}>
+                <Text style={[styles.mealType, { color: Colors.textTertiary }]}>Dinner</Text>
+                <Text style={[styles.mealDesc, { color: Colors.textTertiary, fontStyle: 'italic' }]}>Not logged yet</Text>
+              </View>
+            </Card>
+          </>
+        )}
 
         <View style={{ height: Spacing.xxl }} />
       </ScrollView>
@@ -192,10 +208,11 @@ const styles = StyleSheet.create({
   sourceRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: Spacing.xs },
   sourceText: { fontSize: FontSize.xs, color: Colors.textSecondary, flex: 1 },
   syncText: { fontSize: FontSize.xs, color: Colors.accent },
+  emptyState: { alignItems: 'center', paddingVertical: Spacing.xxl, gap: Spacing.sm },
+  emptyTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.semibold, color: Colors.textSecondary },
+  emptyDesc: { fontSize: FontSize.sm, color: Colors.textTertiary, textAlign: 'center', maxWidth: 300, lineHeight: 20 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: Spacing.sm },
   sectionTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.semibold, color: Colors.textPrimary },
-  sampleBadge: { paddingVertical: 2, paddingHorizontal: 8, borderRadius: 99, backgroundColor: Colors.warning + '20', borderWidth: 1, borderColor: Colors.warning + '40' },
-  sampleBadgeText: { fontSize: FontSize.xs, color: Colors.warning, fontWeight: FontWeight.semibold },
   metricsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
   metricsGridWide: { gap: Spacing.md },
   goalsCard: { marginTop: Spacing.xs },
