@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import {
-  View, Text, ScrollView, StyleSheet, SafeAreaView, useWindowDimensions, RefreshControl,
+  View, Text, ScrollView, StyleSheet, SafeAreaView, useWindowDimensions, RefreshControl, Alert,
 } from 'react-native';
 import { useAuthStore } from '@/hooks/useAuthStore';
 import { UserAvatar } from '@/components/common/UserAvatar';
 import { MetricCard } from '@/components/dashboard/MetricCard';
 import { CoachingCard } from '@/components/dashboard/CoachingCard';
 import { GoalProgress } from '@/components/dashboard/GoalProgress';
+import { ConnectDataSourceCard } from '@/components/dashboard/ConnectDataSourceCard';
 import { Card } from '@/components/common/Card';
 import { Colors, Spacing, FontSize, FontWeight } from '@/constants/theme';
 import { getTodaysSummary, DailyHealthSummary } from '@/services/appleHealth';
@@ -32,6 +33,7 @@ export default function DashboardScreen() {
   const isWide = width > 768;
   const [refreshing, setRefreshing] = React.useState(false);
   const [healthData, setHealthData] = useState<DailyHealthSummary | null>(null);
+  const [connectedSources, setConnectedSources] = React.useState<string[]>([]);
 
   const loadHealthData = async () => {
     try {
@@ -50,6 +52,15 @@ export default function DashboardScreen() {
     setRefreshing(true);
     await loadHealthData();
     setRefreshing(false);
+  };
+
+  const handleConnect = (id: string) => {
+    setConnectedSources((prev) => [...prev, id]);
+    Alert.alert(
+      'Integration Coming Soon',
+      "We're building this integration now. You'll be notified when it's ready to sync your real health data.",
+      [{ text: 'Got it' }],
+    );
   };
 
   const firstName = profile?.full_name?.split(' ')[0] || user?.user_metadata?.full_name?.split(' ')[0] || user?.email?.split('@')[0] || 'there';
@@ -81,6 +92,12 @@ export default function DashboardScreen() {
           </View>
         </View>
 
+        {/* Connect Health Data */}
+        <ConnectDataSourceCard
+          connectedIds={connectedSources}
+          onConnect={handleConnect}
+        />
+
         {/* Health Score */}
         <Card style={styles.scoreCard}>
           <View style={styles.scoreRow}>
@@ -109,7 +126,12 @@ export default function DashboardScreen() {
         </View>
 
         {/* Metrics Grid */}
-        <Text style={styles.sectionTitle}>Your Metrics</Text>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Your Metrics</Text>
+          <View style={styles.sampleBadge}>
+            <Text style={styles.sampleBadgeText}>Sample Data</Text>
+          </View>
+        </View>
         <View style={[styles.metricsGrid, isWide && styles.metricsGridWide]}>
           {metrics.map((m) => (
             <MetricCard key={m.title} {...m} />
@@ -170,7 +192,10 @@ const styles = StyleSheet.create({
   sourceRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: Spacing.xs },
   sourceText: { fontSize: FontSize.xs, color: Colors.textSecondary, flex: 1 },
   syncText: { fontSize: FontSize.xs, color: Colors.accent },
-  sectionTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.semibold, color: Colors.textPrimary, marginTop: Spacing.sm },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: Spacing.sm },
+  sectionTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.semibold, color: Colors.textPrimary },
+  sampleBadge: { paddingVertical: 2, paddingHorizontal: 8, borderRadius: 99, backgroundColor: Colors.warning + '20', borderWidth: 1, borderColor: Colors.warning + '40' },
+  sampleBadgeText: { fontSize: FontSize.xs, color: Colors.warning, fontWeight: FontWeight.semibold },
   metricsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
   metricsGridWide: { gap: Spacing.md },
   goalsCard: { marginTop: Spacing.xs },

@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { OnboardingShell } from '@/components/onboarding/OnboardingShell';
 import { Input } from '@/components/common/Input';
 import { useOnboardingStore } from '@/hooks/useOnboardingStore';
+import { useAuthStore } from '@/hooks/useAuthStore';
 import { Colors, Spacing, BorderRadius, FontSize, FontWeight } from '@/constants/theme';
 
 const GENDERS = [
@@ -16,6 +17,14 @@ const GENDERS = [
 export default function Step1() {
   const router = useRouter();
   const { full_name, age, gender, height_cm, weight_kg, setField } = useOnboardingStore();
+  const user = useAuthStore((s) => s.user);
+
+  // Pre-fill name from Google/Apple metadata if not already set
+  React.useEffect(() => {
+    if (!full_name && user?.user_metadata?.full_name) {
+      setField('full_name', user.user_metadata.full_name);
+    }
+  }, [user]);
 
   const canContinue = full_name.trim().length > 0 && age.length > 0;
 

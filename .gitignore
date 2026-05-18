@@ -10,6 +10,7 @@ web-build/
 *.orig.*
 .env
 .env.local
+.env.example
 .DS_Store
 *.log
 

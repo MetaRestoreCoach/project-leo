@@ -6,7 +6,9 @@ import { useAuthStore } from '@/hooks/useAuthStore';
 
 export default function Index() {
   const router = useRouter();
-  const { session, isInitialized } = useAuthStore();
+  const isInitialized = useAuthStore((s) => s.isInitialized);
+  const session = useAuthStore((s) => s.session);
+  const profile = useAuthStore((s) => s.profile);
 
   // Route once auth is ready.
   // On web, Supabase detectSessionInUrl=true handles ?code= exchange automatically
@@ -16,7 +18,11 @@ export default function Index() {
     const timer = setTimeout(() => {
       try {
         if (session) {
-          router.replace('/(tabs)/dashboard');
+          if (profile?.onboarding_completed) {
+            router.replace('/(tabs)/dashboard');
+          } else {
+            router.replace('/onboarding/step1');
+          }
         } else {
           router.replace('/(auth)/login');
         }
@@ -25,7 +31,7 @@ export default function Index() {
       }
     }, 100);
     return () => clearTimeout(timer);
-  }, [isInitialized, session]);
+  }, [isInitialized, session, profile]);
 
   // Safety net — force login after 10s if auth never initializes
   useEffect(() => {
