@@ -55,15 +55,18 @@ const ExpoSecureStoreAdapter = {
   },
 };
 
+// On web use native localStorage (synchronous) so the PKCE code verifier is
+// written before the OAuth redirect fires. Async adapters cause bad_code_verifier.
+const authStorage = Platform.OS === 'web'
+  ? (typeof window !== 'undefined' ? window.localStorage : undefined)
+  : ExpoSecureStoreAdapter;
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    storage: ExpoSecureStoreAdapter,
+    storage: authStorage,
     autoRefreshToken: true,
     persistSession: true,
-    // Let Supabase auto-detect and exchange the ?code= param on web.
-    // onAuthStateChange fires SIGNED_IN → useAuthStore picks up session → dashboard.
     detectSessionInUrl: Platform.OS === 'web',
-    // PKCE is more secure than implicit; works for both web and native.
     flowType: 'pkce',
   },
 });
