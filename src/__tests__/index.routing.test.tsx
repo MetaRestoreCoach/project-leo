@@ -1,13 +1,16 @@
 // ============================================================
 // app/index.tsx — routing logic tests
+//
+// index.tsx reads auth store state and routes:
+//   • not initialized → show spinner (no navigation)
+//   • initialized + no session → /(auth)/login
+//   • initialized + session + profile.onboarding_completed → /(tabs)/dashboard
+//   • initialized + session + !onboarding_completed → /onboarding/step1
+//   • safety net: not initialized after 10s → /(auth)/login
 // ============================================================
-// We test the three routing paths:
-//   1. No ?code param, no session → navigate to login
-//   2. No ?code param, has session → navigate to dashboard
-//   3. ?code param present → exchangeCodeForSession → replace to /dashboard
 
 import React from 'react';
-import { render, act, waitFor } from '@testing-library/react-native';
+import { render, act } from '@testing-library/react-native';
 
 // ── Router mock ───────────────────────────────────────────
 const mockReplace = jest.fn();
@@ -15,74 +18,70 @@ jest.mock('expo-router', () => ({
   useRouter: () => ({ replace: mockReplace }),
 }));
 
-// ── Supabase mock ──────────────────────────────────────────
-const mockExchangeCodeForSession = jest.fn();
-const mockGetSession = jest.fn();
-
+// ── Supabase mock (prevents WebSocket init if any transitive import hits it) ─
 jest.mock('@/services/supabase', () => ({
   supabase: {
     auth: {
-      exchangeCodeForSession: mockExchangeCodeForSession,
-      getSession: mockGetSession,
+      onAuthStateChange: jest.fn(() => ({ data: { subscription: { unsubscribe: jest.fn() } } })),
+      getSession: jest.fn(),
+      signOut: jest.fn(),
     },
   },
 }));
 
-// ── Auth store mock ────────────────────────────────────────
+// ── Auth store mock — state driven by test-local variables ─
 let mockSession: unknown = null;
 let mockIsInitialized = false;
+let mockProfile: unknown = null;
 
-jest.mock('@/hooks/useAuthStore', () => ({
-  useAuthStore: () => ({
-    session: mockSession,
-    isInitialized: mockIsInitialized,
-  }),
-  // Allow the safety-net effect to call getState()
-  __esModule: true,
-}));
-
-// ── Platform mock (web) ────────────────────────────────────
-jest.mock('react-native', () => {
-  const rn = jest.requireActual('react-native');
-  return { ...rn, Platform: { ...rn.Platform, OS: 'web' } };
+jest.mock('@/hooks/useAuthStore', () => {
+  const useAuthStore = (selector?: (s: any) => any) => {
+    const state = {
+      session: mockSession,
+      isInitialized: mockIsInitialized,
+      profile: mockProfile,
+    };
+    return selector ? selector(state) : state;
+  };
+  useAuthStore.getState = () => ({ isInitialized: mockIsInitialized });
+  return { useAuthStore, __esModule: true };
 });
 
-// ── window.location helpers ────────────────────────────────
-const originalLocation = window.location;
+// ── Import component AFTER mocks ──────────────────────────
+import Index from '../../app/index';
 
-function setSearch(search: string) {
-  Object.defineProperty(window, 'location', {
-    writable: true,
-    value: { ...originalLocation, search, replace: jest.fn() },
-  });
-}
+// ──────────────────────────────────────────────────────────
 
 afterEach(() => {
-  Object.defineProperty(window, 'location', { writable: true, value: originalLocation });
   jest.clearAllMocks();
   jest.useRealTimers();
   mockSession = null;
   mockIsInitialized = false;
+  mockProfile = null;
 });
 
-// ── Dynamic import so mocks are applied before module load ─
-async function renderIndex() {
-  jest.resetModules();
-  const { default: Index } = await import('../../app/index');
-  return render(<Index />);
-}
-
-// ──────────────────────────────────────────────────────────
-
 describe('app/index.tsx routing', () => {
-  // ── Path 1: normal flow, no session ──────────────────
+  // ── Not initialized → spinner, no navigation ──────────
+  it('does not navigate while auth is not initialized', async () => {
+    jest.useFakeTimers();
+    mockIsInitialized = false;
+
+    render(<Index />);
+
+    await act(async () => {
+      jest.advanceTimersByTime(300);
+    });
+
+    expect(mockReplace).not.toHaveBeenCalled();
+  });
+
+  // ── No session → login ───────────────────────────────
   it('redirects to login when initialized with no session', async () => {
     jest.useFakeTimers();
-    setSearch(''); // no ?code
     mockIsInitialized = true;
     mockSession = null;
 
-    await renderIndex();
+    render(<Index />);
 
     await act(async () => {
       jest.advanceTimersByTime(500);
@@ -91,14 +90,14 @@ describe('app/index.tsx routing', () => {
     expect(mockReplace).toHaveBeenCalledWith('/(auth)/login');
   });
 
-  // ── Path 2: normal flow, has session ─────────────────
-  it('redirects to dashboard when initialized with a session', async () => {
+  // ── Session + completed profile → dashboard ───────────
+  it('redirects to dashboard when session and onboarding are complete', async () => {
     jest.useFakeTimers();
-    setSearch('');
     mockIsInitialized = true;
     mockSession = { access_token: 'tok' };
+    mockProfile = { onboarding_completed: true };
 
-    await renderIndex();
+    render(<Index />);
 
     await act(async () => {
       jest.advanceTimersByTime(500);
@@ -107,96 +106,47 @@ describe('app/index.tsx routing', () => {
     expect(mockReplace).toHaveBeenCalledWith('/(tabs)/dashboard');
   });
 
-  // ── Path 3: OAuth callback with valid code ────────────
-  it('exchanges code and replaces to /dashboard on success', async () => {
-    setSearch('?code=abc123');
-    mockExchangeCodeForSession.mockResolvedValue({
-      data: { session: { access_token: 'new-token' } },
-      error: null,
-    });
-
-    await renderIndex();
-
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-
-    expect(mockExchangeCodeForSession).toHaveBeenCalledWith('abc123');
-    expect(window.location.replace).toHaveBeenCalledWith('/dashboard');
-  });
-
-  // ── Path 3b: OAuth code already used (page refresh) ──
-  it('falls back to getSession() when exchange fails on page refresh', async () => {
-    setSearch('?code=used-code');
-    mockExchangeCodeForSession.mockResolvedValue({
-      data: { session: null },
-      error: { message: 'code already used' },
-    });
-    mockGetSession.mockResolvedValue({ data: { session: { access_token: 'existing' } } });
-
-    await renderIndex();
-
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-
-    expect(mockGetSession).toHaveBeenCalled();
-    expect(window.location.replace).toHaveBeenCalledWith('/dashboard');
-  });
-
-  // ── Path 3c: OAuth completely fails, no existing session ─
-  it('redirects to login after 3s when OAuth fails and no session exists', async () => {
+  // ── Session + incomplete profile → onboarding ─────────
+  it('redirects to onboarding when profile is not complete', async () => {
     jest.useFakeTimers();
-    setSearch('?code=bad-code');
-    mockExchangeCodeForSession.mockResolvedValue({
-      data: { session: null },
-      error: { message: 'Invalid code' },
-    });
-    mockGetSession.mockResolvedValue({ data: { session: null } });
+    mockIsInitialized = true;
+    mockSession = { access_token: 'tok' };
+    mockProfile = { onboarding_completed: false };
 
-    await renderIndex();
+    render(<Index />);
 
     await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-      jest.advanceTimersByTime(3500);
+      jest.advanceTimersByTime(500);
     });
 
-    expect(mockReplace).toHaveBeenCalledWith('/(auth)/login');
+    expect(mockReplace).toHaveBeenCalledWith('/onboarding/step1');
   });
 
-  // ── OAuth error param ─────────────────────────────────
-  it('shows error message when OAuth returns error param', async () => {
-    setSearch('?error=access_denied&error_description=User+denied+access');
+  // ── Session + no profile → onboarding ────────────────
+  it('redirects to onboarding when session exists but no profile', async () => {
+    jest.useFakeTimers();
+    mockIsInitialized = true;
+    mockSession = { access_token: 'tok' };
+    mockProfile = null;
 
-    const { getByText } = await renderIndex();
+    render(<Index />);
 
-    await waitFor(() => {
-      expect(getByText(/OAuth error/i)).toBeTruthy();
+    await act(async () => {
+      jest.advanceTimersByTime(500);
     });
-    // Should NOT attempt code exchange
-    expect(mockExchangeCodeForSession).not.toHaveBeenCalled();
+
+    expect(mockReplace).toHaveBeenCalledWith('/onboarding/step1');
   });
 
   // ── Safety net ────────────────────────────────────────
-  it('forces navigation to login after 8s if auth never initializes', async () => {
+  it('forces navigation to login after 10s if auth never initializes', async () => {
     jest.useFakeTimers();
-    setSearch('');
     mockIsInitialized = false;
 
-    // Mock getState to return not initialized
-    const { useAuthStore } = require('@/hooks/useAuthStore');
-    if (useAuthStore.getState) {
-      useAuthStore.getState = () => ({ isInitialized: false });
-    }
-
-    await renderIndex();
+    render(<Index />);
 
     await act(async () => {
-      jest.advanceTimersByTime(8500);
+      jest.advanceTimersByTime(11000);
     });
 
     expect(mockReplace).toHaveBeenCalledWith('/(auth)/login');

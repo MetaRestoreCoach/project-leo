@@ -36,7 +36,7 @@ export function UserAvatar({
   };
 
   return (
-    <View style={[styles.container, containerStyle]}>
+    <View testID="avatar-container" style={[styles.container, containerStyle]}>
       {showImage ? (
         <Image
           source={{ uri: avatarUrl! }}

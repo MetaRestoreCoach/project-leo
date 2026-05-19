@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
-  View, Text, ScrollView, StyleSheet, SafeAreaView, useWindowDimensions, RefreshControl,
+  View, Text, ScrollView, StyleSheet, SafeAreaView, useWindowDimensions, RefreshControl, Platform,
 } from 'react-native';
 import { useAuthStore } from '@/hooks/useAuthStore';
 import { UserAvatar } from '@/components/common/UserAvatar';
@@ -11,6 +11,8 @@ import { ConnectDataSourceCard } from '@/components/dashboard/ConnectDataSourceC
 import { Card } from '@/components/common/Card';
 import { Colors, Spacing, FontSize, FontWeight } from '@/constants/theme';
 import { getTodaysSummary, DailyHealthSummary } from '@/services/appleHealth';
+import { fetchGoogleFitSummary } from '@/services/googleFit';
+import { signInWithGoogleFitScopes } from '@/services/auth';
 import { Ionicons } from '@expo/vector-icons';
 
 const DEMO_COACHING = "Based on your recent data, your post-meal blood glucose tends to spike after lunch. Try adding a 15-minute walk after your midday meal — studies show this can reduce post-prandial glucose by 20-30%. Your sleep has also improved, which is great for insulin sensitivity. This week, focus on increasing fiber intake at breakfast.";
@@ -27,8 +29,10 @@ function buildMetrics(data: DailyHealthSummary | null) {
   ];
 }
 
+const GFIT_PENDING_KEY = 'google_fit_pending';
+
 export default function DashboardScreen() {
-  const { profile, user } = useAuthStore();
+  const { profile, user, session } = useAuthStore();
   const { width } = useWindowDimensions();
   const isWide = width > 768;
   const [refreshing, setRefreshing] = React.useState(false);
@@ -48,13 +52,34 @@ export default function DashboardScreen() {
     loadHealthData();
   }, []);
 
+  // Detect return from Google Fit OAuth — session updates after Supabase processes the redirect
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    if (window.localStorage.getItem(GFIT_PENDING_KEY) !== '1') return;
+    const providerToken = session?.provider_token;
+    if (!providerToken) return; // wait until session is populated
+
+    window.localStorage.removeItem(GFIT_PENDING_KEY);
+    fetchGoogleFitSummary(providerToken).then((data) => {
+      setConnectedSources((prev) => prev.includes('google_fit') ? prev : [...prev, 'google_fit']);
+      if (data) setHealthData(data);
+    });
+  }, [session]);
+
   const onRefresh = async () => {
     setRefreshing(true);
     await loadHealthData();
     setRefreshing(false);
   };
 
-  const handleConnect = (id: string) => {
+  const handleConnect = async (id: string) => {
+    if (id === 'google_fit') {
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.localStorage.setItem(GFIT_PENDING_KEY, '1');
+        await signInWithGoogleFitScopes();
+        return; // page redirects to Google OAuth
+      }
+    }
     setConnectedSources((prev) => [...prev, id]);
     if (id === 'apple_health') {
       loadHealthData();

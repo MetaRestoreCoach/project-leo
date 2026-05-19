@@ -4,13 +4,17 @@
 
 import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
 import { UserAvatar } from '@/components/common/UserAvatar';
 
-// Mock theme constants so the component renders without native font loading
 jest.mock('@/constants/theme', () => ({
   Colors: { primary: '#4F46E5', white: '#FFFFFF' },
   FontWeight: { bold: '700' },
 }));
+
+function flatStyle(style: any): Record<string, unknown> {
+  return StyleSheet.flatten(style) ?? {};
+}
 
 describe('UserAvatar', () => {
   // ── Initial fallback ───────────────────────────────────
@@ -38,12 +42,10 @@ describe('UserAvatar', () => {
 
   // ── Image rendering ────────────────────────────────────
   describe('image rendering', () => {
-    it('renders an Image when avatarUrl is provided', () => {
-      const { getByTestId, queryByText } = render(
+    it('does not show initial when avatarUrl is provided', () => {
+      const { queryByText } = render(
         <UserAvatar name="Kiran" avatarUrl="https://example.com/avatar.jpg" />,
       );
-      // Image is rendered, initial text is not
-      // (React Native Image has no testID by default — check absence of initial)
       expect(queryByText('K')).toBeNull();
     });
 
@@ -51,12 +53,9 @@ describe('UserAvatar', () => {
       const { getByText, UNSAFE_getByType } = render(
         <UserAvatar name="Kiran" avatarUrl="https://example.com/bad.jpg" />,
       );
-
-      // Simulate onError
       const { Image } = require('react-native');
       const image = UNSAFE_getByType(Image);
       fireEvent(image, 'error');
-
       expect(getByText('K')).toBeTruthy();
     });
 
@@ -69,32 +68,40 @@ describe('UserAvatar', () => {
   // ── Size prop ──────────────────────────────────────────
   describe('size prop', () => {
     it('defaults to 40px', () => {
-      const { UNSAFE_getByProps } = render(<UserAvatar name="A" />);
-      const container = UNSAFE_getByProps({ style: expect.arrayContaining([expect.objectContaining({ width: 40 })]) });
-      expect(container).toBeTruthy();
+      const { getByTestId } = render(<UserAvatar name="A" />);
+      const style = flatStyle(getByTestId('avatar-container').props.style);
+      expect(style.width).toBe(40);
+      expect(style.height).toBe(40);
     });
 
     it('applies custom size', () => {
-      const { UNSAFE_getByProps } = render(<UserAvatar name="A" size={80} />);
-      const container = UNSAFE_getByProps({ style: expect.arrayContaining([expect.objectContaining({ width: 80, height: 80 })]) });
-      expect(container).toBeTruthy();
+      const { getByTestId } = render(<UserAvatar name="A" size={80} />);
+      const style = flatStyle(getByTestId('avatar-container').props.style);
+      expect(style.width).toBe(80);
+      expect(style.height).toBe(80);
+    });
+
+    it('sets borderRadius to size/2', () => {
+      const { getByTestId } = render(<UserAvatar name="A" size={60} />);
+      const style = flatStyle(getByTestId('avatar-container').props.style);
+      expect(style.borderRadius).toBe(30);
     });
   });
 
   // ── Border ────────────────────────────────────────────
   describe('borderColor prop', () => {
     it('applies borderWidth and borderColor when borderColor is set', () => {
-      const { UNSAFE_getByProps } = render(<UserAvatar name="A" borderColor="#FF0000" />);
-      const container = UNSAFE_getByProps({ style: expect.arrayContaining([expect.objectContaining({ borderColor: '#FF0000', borderWidth: 2 })]) });
-      expect(container).toBeTruthy();
+      const { getByTestId } = render(<UserAvatar name="A" borderColor="#FF0000" />);
+      const style = flatStyle(getByTestId('avatar-container').props.style);
+      expect(style.borderColor).toBe('#FF0000');
+      expect(style.borderWidth).toBe(2);
     });
 
     it('does not apply border when borderColor is omitted', () => {
-      const { UNSAFE_getByProps } = render(<UserAvatar name="A" />);
-      // Should not find an element with borderWidth set
-      const containers = UNSAFE_getByProps({ style: expect.anything() });
-      const hasBorder = JSON.stringify(containers.props.style).includes('"borderWidth":2');
-      expect(hasBorder).toBe(false);
+      const { getByTestId } = render(<UserAvatar name="A" />);
+      const style = flatStyle(getByTestId('avatar-container').props.style);
+      expect(style.borderWidth).toBeUndefined();
+      expect(style.borderColor).toBeUndefined();
     });
   });
 });
