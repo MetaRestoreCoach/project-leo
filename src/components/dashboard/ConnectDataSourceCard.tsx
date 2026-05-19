@@ -22,7 +22,6 @@ const INTEGRATIONS: Integration[] = [
     icon: 'heart-circle-outline',
     color: '#FF2D55',
     description: 'Steps, heart rate, sleep & more',
-    iosOnly: true,
   },
   {
     id: 'google_fit',
