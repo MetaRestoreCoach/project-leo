@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useRouter } from 'expo-router';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { Colors } from '@/constants/theme';
@@ -9,13 +9,16 @@ export default function Index() {
   const isInitialized = useAuthStore((s) => s.isInitialized);
   const session = useAuthStore((s) => s.session);
   const profile = useAuthStore((s) => s.profile);
+  const navigated = useRef(false);
 
-  // Route once auth is ready.
+  // Route once auth is ready — only navigate once to prevent routing loops.
   // On web, Supabase detectSessionInUrl=true handles ?code= exchange automatically
   // and fires onAuthStateChange → useAuthStore picks up the session.
   useEffect(() => {
-    if (!isInitialized) return;
+    if (!isInitialized || navigated.current) return;
     const timer = setTimeout(() => {
+      if (navigated.current) return;
+      navigated.current = true;
       try {
         if (session) {
           if (profile?.onboarding_completed) {
