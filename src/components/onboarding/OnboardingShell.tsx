@@ -16,11 +16,16 @@ interface OnboardingShellProps {
   nextLabel?: string;
   nextDisabled?: boolean;
   loading?: boolean;
+  /** testID forwarded to the Next/Submit button — useful for tests. */
+  testIDNext?: string;
+  /** testID forwarded to the Back button — useful for tests. */
+  testIDBack?: string;
 }
 
 export function OnboardingShell({
   step, totalSteps, title, subtitle, children,
   onNext, onBack, nextLabel = 'Continue', nextDisabled = false, loading = false,
+  testIDNext, testIDBack,
 }: OnboardingShellProps) {
   const { width } = useWindowDimensions();
   const isWide = width > 768;
@@ -53,7 +58,7 @@ export function OnboardingShell({
           {/* Actions */}
           <View style={styles.actions}>
             {onBack && (
-              <Button title="Back" onPress={onBack} variant="ghost" style={styles.backBtn} />
+              <Button title="Back" onPress={onBack} variant="ghost" style={styles.backBtn} testID={testIDBack} />
             )}
             <Button
               title={nextLabel}
@@ -62,6 +67,7 @@ export function OnboardingShell({
               loading={loading}
               size="lg"
               style={styles.nextBtn}
+              testID={testIDNext}
             />
           </View>
         </View>

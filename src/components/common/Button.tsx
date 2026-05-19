@@ -12,6 +12,7 @@ interface ButtonProps {
   icon?: React.ReactNode;
   style?: ViewStyle;
   textStyle?: TextStyle;
+  testID?: string;
 }
 
 export function Button({
@@ -24,6 +25,7 @@ export function Button({
   icon,
   style,
   textStyle,
+  testID,
 }: ButtonProps) {
   const buttonStyles = [
     styles.base,
@@ -46,6 +48,7 @@ export function Button({
       onPress={onPress}
       disabled={disabled || loading}
       activeOpacity={0.7}
+      testID={testID}
     >
       {loading ? (
         <ActivityIndicator color={variant === 'primary' ? Colors.white : Colors.primary} />
