@@ -7,27 +7,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { Input } from '@/components/common/Input';
 import { Button } from '@/components/common/Button';
 import { signInWithEmail, signInWithGoogle, signInWithApple } from '@/services/auth';
-import { useAuthStore } from '@/hooks/useAuthStore';
 import { Colors, Spacing, FontSize, FontWeight, BorderRadius } from '@/constants/theme';
 
 export default function LoginScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const isWide = width > 768;
-  const profile = useAuthStore((s) => s.profile);
-
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-
-  const routeAfterLogin = () => {
-    if (profile?.onboarding_completed) {
-      router.replace('/(tabs)/dashboard');
-    } else {
-      router.replace('/onboarding/step1');
-    }
-  };
 
   const handleEmailLogin = async () => {
     if (!email || !password) {
@@ -38,7 +27,9 @@ export default function LoginScreen() {
     setError('');
     try {
       await signInWithEmail(email, password);
-      routeAfterLogin();
+      // Navigate to index.tsx — it waits for profileFetched then routes correctly
+      // for both new users (→ onboarding) and returning users (→ dashboard).
+      router.replace('/');
     } catch (err: any) {
       setError(err.message || 'Login failed. Please try again.');
     } finally {
@@ -51,9 +42,10 @@ export default function LoginScreen() {
     setError('');
     try {
       await signInWithGoogle();
-      // On web the browser redirects away; index.tsx handles routing via onAuthStateChange
+      // Web: browser redirects away; index.tsx handles routing on return.
+      // Native: navigate to index.tsx to route based on profile.
       if (Platform.OS !== 'web') {
-        routeAfterLogin();
+        router.replace('/');
       }
     } catch (err: any) {
       setError(err.message || 'Google sign-in failed.');
@@ -68,7 +60,7 @@ export default function LoginScreen() {
     try {
       await signInWithApple();
       if (Platform.OS !== 'web') {
-        routeAfterLogin();
+        router.replace('/');
       }
     } catch (err: any) {
       setError(err.message || 'Apple sign-in failed.');

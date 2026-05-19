@@ -32,6 +32,7 @@ jest.mock('@/services/supabase', () => ({
 // ── Auth store mock — state driven by test-local variables ─
 let mockSession: unknown = null;
 let mockIsInitialized = false;
+let mockProfileFetched = false;
 let mockProfile: unknown = null;
 
 jest.mock('@/hooks/useAuthStore', () => {
@@ -39,6 +40,7 @@ jest.mock('@/hooks/useAuthStore', () => {
     const state = {
       session: mockSession,
       isInitialized: mockIsInitialized,
+      profileFetched: mockProfileFetched,
       profile: mockProfile,
     };
     return selector ? selector(state) : state;
@@ -57,6 +59,7 @@ afterEach(() => {
   jest.useRealTimers();
   mockSession = null;
   mockIsInitialized = false;
+  mockProfileFetched = false;
   mockProfile = null;
 });
 
@@ -79,13 +82,12 @@ describe('app/index.tsx routing', () => {
   it('redirects to login when initialized with no session', async () => {
     jest.useFakeTimers();
     mockIsInitialized = true;
+    mockProfileFetched = true;
     mockSession = null;
 
     render(<Index />);
 
-    await act(async () => {
-      jest.advanceTimersByTime(500);
-    });
+    await act(async () => { jest.advanceTimersByTime(500); });
 
     expect(mockReplace).toHaveBeenCalledWith('/(auth)/login');
   });
@@ -94,14 +96,13 @@ describe('app/index.tsx routing', () => {
   it('redirects to dashboard when session and onboarding are complete', async () => {
     jest.useFakeTimers();
     mockIsInitialized = true;
+    mockProfileFetched = true;
     mockSession = { access_token: 'tok' };
     mockProfile = { onboarding_completed: true };
 
     render(<Index />);
 
-    await act(async () => {
-      jest.advanceTimersByTime(500);
-    });
+    await act(async () => { jest.advanceTimersByTime(500); });
 
     expect(mockReplace).toHaveBeenCalledWith('/(tabs)/dashboard');
   });
@@ -110,14 +111,13 @@ describe('app/index.tsx routing', () => {
   it('redirects to onboarding when profile is not complete', async () => {
     jest.useFakeTimers();
     mockIsInitialized = true;
+    mockProfileFetched = true;
     mockSession = { access_token: 'tok' };
     mockProfile = { onboarding_completed: false };
 
     render(<Index />);
 
-    await act(async () => {
-      jest.advanceTimersByTime(500);
-    });
+    await act(async () => { jest.advanceTimersByTime(500); });
 
     expect(mockReplace).toHaveBeenCalledWith('/onboarding/step1');
   });
@@ -126,14 +126,13 @@ describe('app/index.tsx routing', () => {
   it('redirects to onboarding when session exists but no profile', async () => {
     jest.useFakeTimers();
     mockIsInitialized = true;
+    mockProfileFetched = true;
     mockSession = { access_token: 'tok' };
     mockProfile = null;
 
     render(<Index />);
 
-    await act(async () => {
-      jest.advanceTimersByTime(500);
-    });
+    await act(async () => { jest.advanceTimersByTime(500); });
 
     expect(mockReplace).toHaveBeenCalledWith('/onboarding/step1');
   });

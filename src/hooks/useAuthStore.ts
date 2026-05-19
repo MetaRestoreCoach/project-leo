@@ -14,6 +14,7 @@ interface AuthState {
   profile: Profile | null;
   isLoading: boolean;
   isInitialized: boolean;
+  profileFetched: boolean; // true once profile fetch has completed or failed
 
   initialize: () => Promise<void>;
   setSession: (session: Session | null) => void;
@@ -28,6 +29,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   profile: null,
   isLoading: true,
   isInitialized: false,
+  profileFetched: false,
 
   initialize: async () => {
     try {
@@ -42,33 +44,37 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         try {
           if (newSession?.user) {
             const { user: currentUser } = get();
-            // Immediately update session so navigation to dashboard is not delayed
             set({
               session: newSession,
               user: newSession.user,
               isLoading: false,
               isInitialized: true,
+              profileFetched: false, // reset while we fetch for this user
             });
-            // Fetch profile in the background (only when user changes)
+            // Fetch profile — set profileFetched: true when done so index.tsx
+            // knows it's safe to make a routing decision
             if (currentUser?.id !== newSession.user.id || !get().profile) {
               try {
                 const profile = await getProfile(newSession.user.id);
-                set({ profile });
+                set({ profile, profileFetched: true });
               } catch (e) {
                 console.warn('Profile fetch failed:', e);
+                set({ profileFetched: true }); // mark done even on error
               }
+            } else {
+              set({ profileFetched: true }); // profile already in store
             }
           } else {
-            set({ session: null, user: null, profile: null, isLoading: false, isInitialized: true });
+            set({ session: null, user: null, profile: null, isLoading: false, isInitialized: true, profileFetched: true });
           }
         } catch (e) {
           console.warn('Auth state change error:', e);
-          set({ isLoading: false, isInitialized: true });
+          set({ isLoading: false, isInitialized: true, profileFetched: true });
         }
       });
     } catch (error) {
       console.warn('Auth initialization error:', error);
-      set({ isLoading: false, isInitialized: true });
+      set({ isLoading: false, isInitialized: true, profileFetched: true });
     }
   },
 

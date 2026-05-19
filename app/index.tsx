@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { useRouter } from 'expo-router';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { Colors } from '@/constants/theme';
@@ -7,34 +7,29 @@ import { useAuthStore } from '@/hooks/useAuthStore';
 export default function Index() {
   const router = useRouter();
   const isInitialized = useAuthStore((s) => s.isInitialized);
+  const profileFetched = useAuthStore((s) => s.profileFetched);
   const session = useAuthStore((s) => s.session);
   const profile = useAuthStore((s) => s.profile);
-  const navigated = useRef(false);
 
-  // Route once auth is ready — only navigate once to prevent routing loops.
-  // On web, Supabase detectSessionInUrl=true handles ?code= exchange automatically
-  // and fires onAuthStateChange → useAuthStore picks up the session.
+  // Route only after BOTH auth AND profile fetch are complete.
+  // profileFetched prevents routing before the network call for the profile
+  // returns, which would cause returning users to land on onboarding/step1.
   useEffect(() => {
-    if (!isInitialized || navigated.current) return;
-    const timer = setTimeout(() => {
-      if (navigated.current) return;
-      navigated.current = true;
-      try {
-        if (session) {
-          if (profile?.onboarding_completed) {
-            router.replace('/(tabs)/dashboard');
-          } else {
-            router.replace('/onboarding/step1');
-          }
+    if (!isInitialized || !profileFetched) return;
+    try {
+      if (session) {
+        if (profile?.onboarding_completed) {
+          router.replace('/(tabs)/dashboard');
         } else {
-          router.replace('/(auth)/login');
+          router.replace('/onboarding/step1');
         }
-      } catch (e) {
-        console.warn('Navigation failed:', e);
+      } else {
+        router.replace('/(auth)/login');
       }
-    }, 100);
-    return () => clearTimeout(timer);
-  }, [isInitialized, session, profile]);
+    } catch (e) {
+      console.warn('Navigation failed:', e);
+    }
+  }, [isInitialized, profileFetched, session, profile]);
 
   // Safety net — force login after 10s if auth never initializes
   useEffect(() => {
