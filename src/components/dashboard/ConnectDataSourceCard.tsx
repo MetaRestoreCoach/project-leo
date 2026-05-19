@@ -59,7 +59,18 @@ export function ConnectDataSourceCard({ connectedIds = [], onConnect }: Props) {
     if (isIosOnly || connectedIds.includes(integration.id)) return;
 
     if (integration.note) {
-      Alert.alert(integration.name, integration.note);
+      if (Platform.OS === 'web') {
+        window.alert(`${integration.name}: ${integration.note}`);
+      } else {
+        Alert.alert(integration.name, integration.note);
+      }
+      return;
+    }
+
+    // On web, Alert.alert maps to window.confirm() which browsers block after redirects.
+    // Call onConnect directly — the OAuth redirect itself is the confirmation step.
+    if (Platform.OS === 'web') {
+      onConnect(integration.id);
       return;
     }
 

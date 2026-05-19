@@ -46,6 +46,7 @@ function resetStore() {
     profile: null,
     isLoading: true,
     isInitialized: false,
+    profileFetched: false,
   });
   onAuthStateChangeCallback = null;
   jest.clearAllMocks();
@@ -113,6 +114,27 @@ describe('useAuthStore', () => {
       expect(useAuthStore.getState().isInitialized).toBe(true);
       expect(useAuthStore.getState().session).toBe(fakeSession);
       expect(useAuthStore.getState().profile).toBeNull();
+    });
+
+    it('sets profileFetched=true and profile=null when profile fetch times out after 5s', async () => {
+      jest.useFakeTimers();
+      mockGetProfile.mockReturnValue(new Promise(() => {})); // never resolves
+
+      useAuthStore.getState().initialize();
+      onAuthStateChangeCallback?.('SIGNED_IN', fakeSession);
+      await Promise.resolve(); // let the async callback reach the await
+
+      expect(useAuthStore.getState().profileFetched).toBe(false);
+
+      jest.advanceTimersByTime(5001); // trigger the 5s timeout
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve(); // flush the rejection through Promise.race + catch
+
+      expect(useAuthStore.getState().profileFetched).toBe(true);
+      expect(useAuthStore.getState().profile).toBeNull();
+
+      jest.useRealTimers();
     });
 
     it('does not re-fetch profile when same user fires another event', async () => {

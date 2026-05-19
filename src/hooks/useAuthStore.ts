@@ -55,7 +55,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             // knows it's safe to make a routing decision
             if (currentUser?.id !== newSession.user.id || !get().profile) {
               try {
-                const profile = await getProfile(newSession.user.id);
+                const timeout = new Promise<never>((_, reject) =>
+                  setTimeout(() => reject(new Error('Profile fetch timeout')), 5000)
+                );
+                const profile = await Promise.race([getProfile(newSession.user.id), timeout]);
                 set({ profile, profileFetched: true });
               } catch (e) {
                 console.warn('Profile fetch failed:', e);

@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useRouter } from 'expo-router';
-import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, ActivityIndicator, StyleSheet, Platform } from 'react-native';
 import { Colors } from '@/constants/theme';
 import { useAuthStore } from '@/hooks/useAuthStore';
 
@@ -18,7 +18,12 @@ export default function Index() {
     if (!isInitialized || !profileFetched) return;
     try {
       if (session) {
-        if (profile?.onboarding_completed) {
+        // If returning from Google Fit OAuth, the user was already on the dashboard
+        // (only onboarded users reach that flow), so skip the onboarding check.
+        const isGfitReturn = Platform.OS === 'web'
+          && typeof window !== 'undefined'
+          && window.localStorage.getItem('google_fit_pending') === '1';
+        if (isGfitReturn || profile?.onboarding_completed) {
           router.replace('/(tabs)/dashboard');
         } else {
           router.replace('/onboarding/step1');

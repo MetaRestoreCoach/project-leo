@@ -6,11 +6,13 @@
 //   • initialized + no session → /(auth)/login
 //   • initialized + session + profile.onboarding_completed → /(tabs)/dashboard
 //   • initialized + session + !onboarding_completed → /onboarding/step1
+//   • initialized + session + google_fit_pending in localStorage → /(tabs)/dashboard
 //   • safety net: not initialized after 10s → /(auth)/login
 // ============================================================
 
 import React from 'react';
 import { render, act } from '@testing-library/react-native';
+import { Platform } from 'react-native';
 
 // ── Router mock ───────────────────────────────────────────
 const mockReplace = jest.fn();
@@ -149,5 +151,55 @@ describe('app/index.tsx routing', () => {
     });
 
     expect(mockReplace).toHaveBeenCalledWith('/(auth)/login');
+  });
+
+  // ── Google Fit OAuth return ───────────────────────────
+  describe('google_fit_pending localStorage flag', () => {
+    const originalOS = Platform.OS;
+    const localStorageItems: Record<string, string> = {};
+    const mockLocalStorage = {
+      getItem: (key: string) => localStorageItems[key] ?? null,
+      setItem: (key: string, value: string) => { localStorageItems[key] = value; },
+      removeItem: (key: string) => { delete localStorageItems[key]; },
+      clear: () => { Object.keys(localStorageItems).forEach((k) => delete localStorageItems[k]); },
+    };
+
+    beforeEach(() => {
+      (Platform as any).OS = 'web';
+      Object.defineProperty(global.window, 'localStorage', { value: mockLocalStorage, writable: true, configurable: true });
+      mockLocalStorage.clear();
+    });
+
+    afterEach(() => {
+      (Platform as any).OS = originalOS;
+      mockLocalStorage.clear();
+    });
+
+    it('routes to dashboard when returning from Google Fit OAuth even with null profile', async () => {
+      jest.useFakeTimers();
+      mockIsInitialized = true;
+      mockProfileFetched = true;
+      mockSession = { access_token: 'tok' };
+      mockProfile = null; // profile fetch failed/timed out
+      mockLocalStorage.setItem('google_fit_pending', '1');
+
+      render(<Index />);
+      await act(async () => { jest.advanceTimersByTime(500); });
+
+      expect(mockReplace).toHaveBeenCalledWith('/(tabs)/dashboard');
+    });
+
+    it('routes to login when flag is set but there is no session', async () => {
+      jest.useFakeTimers();
+      mockIsInitialized = true;
+      mockProfileFetched = true;
+      mockSession = null;
+      mockLocalStorage.setItem('google_fit_pending', '1');
+
+      render(<Index />);
+      await act(async () => { jest.advanceTimersByTime(500); });
+
+      expect(mockReplace).toHaveBeenCalledWith('/(auth)/login');
+    });
   });
 });

@@ -9,7 +9,7 @@ import { CoachingCard } from '@/components/dashboard/CoachingCard';
 import { GoalProgress } from '@/components/dashboard/GoalProgress';
 import { ConnectDataSourceCard } from '@/components/dashboard/ConnectDataSourceCard';
 import { Card } from '@/components/common/Card';
-import { Colors, Spacing, FontSize, FontWeight } from '@/constants/theme';
+import { Colors, Spacing, FontSize, FontWeight, BorderRadius } from '@/constants/theme';
 import { getTodaysSummary, DailyHealthSummary } from '@/services/appleHealth';
 import { fetchGoogleFitSummary } from '@/services/googleFit';
 import { signInWithGoogleFitScopes } from '@/services/auth';
@@ -38,6 +38,7 @@ export default function DashboardScreen() {
   const [refreshing, setRefreshing] = React.useState(false);
   const [healthData, setHealthData] = useState<DailyHealthSummary | null>(null);
   const [connectedSources, setConnectedSources] = React.useState<string[]>([]);
+  const [gfitError, setGfitError] = useState<string | null>(null);
 
   const loadHealthData = async () => {
     try {
@@ -56,13 +57,23 @@ export default function DashboardScreen() {
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof window === 'undefined') return;
     if (window.localStorage.getItem(GFIT_PENDING_KEY) !== '1') return;
-    const providerToken = session?.provider_token;
-    if (!providerToken) return; // wait until session is populated
+    if (!session) return; // still initializing
 
     window.localStorage.removeItem(GFIT_PENDING_KEY);
+    const providerToken = session.provider_token;
+    if (!providerToken) {
+      setGfitError('Google Fit not authorized — fitness scopes may not be approved on the OAuth consent screen.');
+      return;
+    }
+
     fetchGoogleFitSummary(providerToken).then((data) => {
+      if (!data) {
+        setGfitError('Failed to fetch Google Fit data. Verify the Fitness API is enabled for this OAuth client in Google Cloud.');
+        return;
+      }
+      setGfitError(null);
       setConnectedSources((prev) => prev.includes('google_fit') ? prev : [...prev, 'google_fit']);
-      if (data) setHealthData(data);
+      setHealthData(data);
     });
   }, [session]);
 
@@ -76,8 +87,13 @@ export default function DashboardScreen() {
     if (id === 'google_fit') {
       if (Platform.OS === 'web' && typeof window !== 'undefined') {
         window.localStorage.setItem(GFIT_PENDING_KEY, '1');
-        await signInWithGoogleFitScopes();
-        return; // page redirects to Google OAuth
+        try {
+          await signInWithGoogleFitScopes();
+        } catch (e: any) {
+          window.localStorage.removeItem(GFIT_PENDING_KEY);
+          setGfitError(`Google Fit sign-in failed: ${e?.message ?? 'unknown error'}`);
+        }
+        return; // page redirects to Google OAuth on success
       }
     }
     setConnectedSources((prev) => [...prev, id]);
@@ -125,6 +141,12 @@ export default function DashboardScreen() {
           connectedIds={connectedSources}
           onConnect={handleConnect}
         />
+        {gfitError && (
+          <View style={styles.gfitErrorBanner} accessibilityRole="alert">
+            <Ionicons name="alert-circle" size={18} color={Colors.error} />
+            <Text style={styles.gfitErrorText}>{gfitError}</Text>
+          </View>
+        )}
 
         {/* Empty state — shown when nothing is connected */}
         {!hasData && (
@@ -247,4 +269,6 @@ const styles = StyleSheet.create({
   mealDesc: { flex: 1, fontSize: FontSize.sm, color: Colors.textSecondary },
   mealCal: { fontSize: FontSize.xs, color: Colors.textTertiary },
   mealDivider: { height: 1, backgroundColor: Colors.borderLight },
+  gfitErrorBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm, backgroundColor: Colors.error + '12', borderWidth: 1, borderColor: Colors.error + '40', borderRadius: BorderRadius.md, padding: Spacing.sm },
+  gfitErrorText: { flex: 1, fontSize: FontSize.sm, color: Colors.error, lineHeight: 20 },
 });

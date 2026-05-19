@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { View, ActivityIndicator, StyleSheet, Text } from 'react-native';
@@ -29,24 +29,14 @@ class ErrorBoundary extends React.Component<
 }
 
 export default function RootLayout() {
-  const [ready, setReady] = useState(false);
-
   useEffect(() => {
-    // Defer auth initialization — let the router mount first
-    const timer = setTimeout(() => setReady(true), 100);
-    return () => clearTimeout(timer);
-  }, []);
-
-  useEffect(() => {
-    if (!ready) return;
-    // Lazy-load and initialize auth store after mount
     try {
       const { useAuthStore } = require('@/hooks/useAuthStore');
       useAuthStore.getState().initialize();
     } catch (e) {
       console.warn('Auth init failed:', e);
     }
-  }, [ready]);
+  }, []);
 
   return (
     <ErrorBoundary>

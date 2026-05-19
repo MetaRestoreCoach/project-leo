@@ -101,7 +101,7 @@ export async function signInWithGoogleFitScopes() {
         'https://www.googleapis.com/auth/fitness.heart_rate.read',
         'https://www.googleapis.com/auth/fitness.sleep.read',
       ].join(' '),
-      queryParams: { access_type: 'offline', prompt: 'consent select_account' },
+      queryParams: { access_type: 'offline', prompt: 'consent' },
     },
   });
 
