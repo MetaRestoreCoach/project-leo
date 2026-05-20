@@ -5,8 +5,9 @@
 //   • not initialized → show spinner (no navigation)
 //   • initialized + no session → /(auth)/login
 //   • initialized + session + profile.onboarding_completed → /(tabs)/dashboard
-//   • initialized + session + !onboarding_completed → /onboarding/step1
+//   • initialized + session + !onboarding_completed → /onboarding/welcome
 //   • initialized + session + google_fit_pending in localStorage → /(tabs)/dashboard
+//   • initialized + session + onboarding_gfit_pending → /onboarding/welcome
 //   • safety net: not initialized after 10s → /(auth)/login
 // ============================================================
 
@@ -109,7 +110,7 @@ describe('app/index.tsx routing', () => {
     expect(mockReplace).toHaveBeenCalledWith('/(tabs)/dashboard');
   });
 
-  // ── Session + incomplete profile → onboarding ─────────
+  // ── Session + incomplete profile → onboarding welcome ─
   it('redirects to onboarding when profile is not complete', async () => {
     jest.useFakeTimers();
     mockIsInitialized = true;
@@ -121,10 +122,10 @@ describe('app/index.tsx routing', () => {
 
     await act(async () => { jest.advanceTimersByTime(500); });
 
-    expect(mockReplace).toHaveBeenCalledWith('/onboarding/step1');
+    expect(mockReplace).toHaveBeenCalledWith('/onboarding/welcome');
   });
 
-  // ── Session + no profile → onboarding ────────────────
+  // ── Session + no profile → onboarding welcome ────────
   it('redirects to onboarding when session exists but no profile', async () => {
     jest.useFakeTimers();
     mockIsInitialized = true;
@@ -136,7 +137,7 @@ describe('app/index.tsx routing', () => {
 
     await act(async () => { jest.advanceTimersByTime(500); });
 
-    expect(mockReplace).toHaveBeenCalledWith('/onboarding/step1');
+    expect(mockReplace).toHaveBeenCalledWith('/onboarding/welcome');
   });
 
   // ── Safety net ────────────────────────────────────────

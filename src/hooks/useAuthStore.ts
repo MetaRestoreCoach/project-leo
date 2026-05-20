@@ -3,6 +3,7 @@
 // ============================================================
 
 import { create } from 'zustand';
+import { Platform } from 'react-native';
 import { Session, User } from '@supabase/supabase-js';
 import { Profile } from '@/types';
 import { supabase } from '@/services/supabase';
@@ -33,13 +34,21 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   initialize: async () => {
     try {
-      // Register onAuthStateChange FIRST.
-      // Supabase waits for its internal initializePromise (which includes
-      // URL hash / OAuth-callback token processing) before firing any event.
-      // The first event is always INITIAL_SESSION — guaranteed to carry the
-      // correct session even on OAuth redirects. This avoids the race where
-      // getSession() was called before hash tokens were stored, causing the
-      // app to land on the login page instead of the dashboard.
+      // On web OAuth return: exchange the PKCE ?code= before registering the
+      // listener. Supabase's detectSessionInUrl runs lazily, so without this
+      // INITIAL_SESSION fires with null before the exchange finishes and the
+      // app redirects to login. Only runs when a code is present (no-op otherwise).
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        const code = new URLSearchParams(window.location.search).get('code');
+        if (code) {
+          try {
+            await supabase.auth.exchangeCodeForSession(window.location.href);
+          } catch {
+            // exchange failed — onAuthStateChange will handle the null session
+          }
+        }
+      }
+
       supabase.auth.onAuthStateChange(async (event, newSession) => {
         try {
           if (newSession?.user) {

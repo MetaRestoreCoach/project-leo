@@ -18,15 +18,20 @@ export default function Index() {
     if (!isInitialized || !profileFetched) return;
     try {
       if (session) {
-        // If returning from Google Fit OAuth, the user was already on the dashboard
-        // (only onboarded users reach that flow), so skip the onboarding check.
-        const isGfitReturn = Platform.OS === 'web'
-          && typeof window !== 'undefined'
-          && window.localStorage.getItem('google_fit_pending') === '1';
-        if (isGfitReturn || profile?.onboarding_completed) {
+        const isWeb = Platform.OS === 'web' && typeof window !== 'undefined';
+        // Returning from Google Fit OAuth triggered from the dashboard
+        const isGfitReturn = isWeb && window.localStorage.getItem('google_fit_pending') === '1';
+        // Returning from Google Fit OAuth triggered during onboarding connect step
+        const isOnboardingGfitReturn = isWeb && window.localStorage.getItem('onboarding_gfit_pending') === '1';
+
+        if (isOnboardingGfitReturn) {
+          window.localStorage.removeItem('onboarding_gfit_pending');
+          router.replace('/onboarding/welcome');
+        } else if (isGfitReturn || profile?.onboarding_completed) {
           router.replace('/(tabs)/dashboard');
         } else {
-          router.replace('/onboarding/step1');
+          // New user — show welcome hub (connect data + mandatory profile setup)
+          router.replace('/onboarding/welcome');
         }
       } else {
         router.replace('/(auth)/login');
