@@ -2,11 +2,18 @@
 // appleHealth service — unit tests (web/demo path)
 // ============================================================
 
-// Force web platform for this suite (no HealthKit available)
-jest.mock('react-native', () => {
-  const rn = jest.requireActual('react-native');
-  return { ...rn, Platform: { ...rn.Platform, OS: 'web' } };
-});
+// Force web platform for this suite (minimal mock avoids native module loading)
+jest.mock('react-native', () => ({
+  Platform: { OS: 'web', select: (spec: Record<string, unknown>) => spec['web'] ?? spec['default'] },
+}));
+
+// Prevent supabase WebSocket init (appleHealth.native.ts imports supabase)
+jest.mock('@/services/supabase', () => ({
+  supabase: {
+    auth: { onAuthStateChange: jest.fn(() => ({ data: { subscription: { unsubscribe: jest.fn() } } })) },
+    from: jest.fn(() => ({ select: jest.fn(), insert: jest.fn(), upsert: jest.fn() })),
+  },
+}));
 
 import {
   isHealthKitAvailable,
@@ -24,9 +31,9 @@ describe('appleHealth (web/demo fallback)', () => {
     expect(isHealthKitAvailable()).toBe(false);
   });
 
-  it('requestHealthPermissions returns true on web (allows demo data)', async () => {
+  it('requestHealthPermissions returns false on non-iOS (HealthKit not available)', async () => {
     const result = await requestHealthPermissions();
-    expect(result).toBe(true);
+    expect(result).toBe(false);
   });
 
   // ── getTodaysSummary ──────────────────────────────────

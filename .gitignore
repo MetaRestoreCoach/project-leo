@@ -10,6 +10,7 @@ web-build/
 *.orig.*
 .env
 .env.local
+.env.example
 .DS_Store
 *.log
 
@@ -18,3 +19,6 @@ web-build/
 
 expo-env.d.ts
 # @end expo-cli
+
+# Supabase CLI local cache — generated on `supabase link`, not source
+supabase/.temp/

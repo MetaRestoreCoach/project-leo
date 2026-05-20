@@ -60,6 +60,7 @@ export async function signInWithGoogle() {
     options: {
       redirectTo,
       skipBrowserRedirect: Platform.OS !== 'web',
+      queryParams: { prompt: 'select_account' },
     },
   });
 
@@ -74,6 +75,44 @@ export async function signInWithGoogle() {
       if (code) {
         await supabase.auth.exchangeCodeForSession(code);
       }
+    }
+  }
+
+  return data;
+}
+
+// -- Google Fit (extended scopes re-auth) --
+
+export async function signInWithGoogleFitScopes() {
+  if (Platform.OS !== 'web') loadAuthModules();
+
+  const redirectTo = Platform.OS === 'web'
+    ? window.location.origin
+    : makeRedirectUri({ scheme: 'projectleo' });
+
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo,
+      skipBrowserRedirect: Platform.OS !== 'web',
+      scopes: [
+        'https://www.googleapis.com/auth/fitness.activity.read',
+        'https://www.googleapis.com/auth/fitness.body.read',
+        'https://www.googleapis.com/auth/fitness.heart_rate.read',
+        'https://www.googleapis.com/auth/fitness.sleep.read',
+      ].join(' '),
+      queryParams: { access_type: 'offline', prompt: 'consent' },
+    },
+  });
+
+  if (error) throw error;
+
+  if (Platform.OS !== 'web' && data.url) {
+    const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+    if (result.type === 'success' && result.url) {
+      const url = new URL(result.url);
+      const code = url.searchParams.get('code');
+      if (code) await supabase.auth.exchangeCodeForSession(code);
     }
   }
 

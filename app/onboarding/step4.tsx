@@ -6,6 +6,7 @@ import { ChipSelector } from '@/components/onboarding/ChipSelector';
 import { useOnboardingStore } from '@/hooks/useOnboardingStore';
 import { useAuthStore } from '@/hooks/useAuthStore';
 import { completeOnboarding } from '@/services/profile';
+import { supabase } from '@/services/supabase';
 import { FOOD_PREF_LABELS, ACTIVITY_LABELS } from '@/constants/labels';
 import { FoodPreference, ActivityLevel } from '@/types';
 import { Colors, Spacing, BorderRadius, FontSize, FontWeight } from '@/constants/theme';
@@ -25,7 +26,8 @@ export default function Step4() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const { user, refreshProfile } = useAuthStore();
+  const user = useAuthStore((s) => s.user);
+  const setProfile = useAuthStore((s) => s.setProfile);
   const store = useOnboardingStore();
 
   const canFinish = store.activity_level && store.food_preferences.length > 0;
@@ -34,8 +36,15 @@ export default function Step4() {
     if (!user || !canFinish) return;
     setLoading(true);
     setError('');
+    const timeout = setTimeout(() => {
+      setLoading(false);
+      setError('Request timed out. Please check your connection and try again.');
+    }, 12000);
     try {
-      await completeOnboarding(user.id, {
+      // Ensure session is fresh before making the DB call (avoids silent token-refresh hangs)
+      await supabase.auth.getSession();
+
+      const updatedProfile = await completeOnboarding(user.id, {
         full_name: store.full_name,
         age: parseInt(store.age, 10),
         gender: store.gender,
@@ -46,12 +55,18 @@ export default function Step4() {
         conditions: store.conditions,
         food_preferences: store.food_preferences,
       });
-      await refreshProfile();
+
+      // Set profile directly from the upsert result — avoids a second Supabase call
+      // that can hang while the OAuth token is still settling
+      if (updatedProfile) setProfile(updatedProfile);
+
       store.reset();
       router.replace('/(tabs)/dashboard');
     } catch (err: any) {
-      setError(err.message || 'Failed to save profile.');
+      console.error('completeOnboarding error:', err);
+      setError(err.message || err.details || 'Failed to save profile. Please try again.');
     } finally {
+      clearTimeout(timeout);
       setLoading(false);
     }
   };

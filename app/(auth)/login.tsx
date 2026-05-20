@@ -13,7 +13,6 @@ export default function LoginScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const isWide = width > 768;
-
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -28,7 +27,9 @@ export default function LoginScreen() {
     setError('');
     try {
       await signInWithEmail(email, password);
-      router.replace('/(tabs)/dashboard');
+      // Navigate to index.tsx — it waits for profileFetched then routes correctly
+      // for both new users (→ onboarding) and returning users (→ dashboard).
+      router.replace('/');
     } catch (err: any) {
       setError(err.message || 'Login failed. Please try again.');
     } finally {
@@ -41,9 +42,10 @@ export default function LoginScreen() {
     setError('');
     try {
       await signInWithGoogle();
-      // On web, OAuth redirect handles navigation via onAuthStateChange
+      // Web: browser redirects away; index.tsx handles routing on return.
+      // Native: navigate to index.tsx to route based on profile.
       if (Platform.OS !== 'web') {
-        router.replace('/(tabs)/dashboard');
+        router.replace('/');
       }
     } catch (err: any) {
       setError(err.message || 'Google sign-in failed.');
@@ -58,7 +60,7 @@ export default function LoginScreen() {
     try {
       await signInWithApple();
       if (Platform.OS !== 'web') {
-        router.replace('/(tabs)/dashboard');
+        router.replace('/');
       }
     } catch (err: any) {
       setError(err.message || 'Apple sign-in failed.');
