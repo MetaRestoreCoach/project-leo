@@ -84,6 +84,21 @@ export function validateResponse(
     return { valid: true, error: null };
   }
 
+  if (question.type === STEP_TYPES.PILLS) {
+    if (question.multiSelect) {
+      const items = (value as string[] | undefined) ?? [];
+      const filled = items.filter((s) => s.trim().length > 0);
+      const min = question.minItems ?? 1;
+      if (filled.length < min) {
+        return { valid: false, error: `Please select at least ${min} option${min > 1 ? 's' : ''}.` };
+      }
+    } else {
+      const selected = Array.isArray(value) ? value[0] : (value as string | undefined) ?? '';
+      if (!selected || !selected.trim()) return { valid: false, error: 'Please select an option.' };
+    }
+    return { valid: true, error: null };
+  }
+
   return { valid: true, error: null };
 }
 

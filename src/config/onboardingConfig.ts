@@ -1,15 +1,11 @@
-// ============================================================
-// Project LEO — Onboarding Feature Config
-// Remote config is fetched from Supabase and merged over these defaults.
-// To update questions without a code deploy, edit the remote config.
-// ============================================================
-
-export const SCHEMA_VERSION = '1.0.0';
+export const SCHEMA_VERSION = '1.1.0';
 
 export const STEP_TYPES = {
   TEXTAREA: 'textarea',
   MULTITEXT: 'multitext',
   SELECT: 'select',
+  PILLS: 'pills',
+  GROUP: 'group',
 } as const;
 
 export type StepType = typeof STEP_TYPES[keyof typeof STEP_TYPES];
@@ -21,7 +17,7 @@ export interface SelectOption {
 
 export interface QuestionStep {
   id: string;
-  type: StepType;
+  type: Exclude<StepType, 'group'>;
   question: string;
   required: boolean;
   hint: string | null;
@@ -31,9 +27,24 @@ export interface QuestionStep {
   // multitext
   minItems?: number;
   maxItems?: number;
-  // select
+  // select / pills
   options?: SelectOption[];
+  // pills
+  multiSelect?: boolean;
+  hasOther?: boolean;
+  maxSelections?: number;
 }
+
+export interface GroupStep {
+  id: string;
+  type: 'group';
+  title: string;
+  hint: string | null;
+  required: boolean;
+  subSteps: QuestionStep[];
+}
+
+export type AnyStep = QuestionStep | GroupStep;
 
 export interface WheelSegment {
   id: string;
@@ -56,75 +67,136 @@ export interface WellnessWheelConfig {
 export interface OnboardingConfig {
   schemaVersion: string;
   lastUpdated: string;
-  steps: QuestionStep[];
+  steps: AnyStep[];
   wellnessWheel: WellnessWheelConfig;
 }
-
-// ---------------------------------------------------------------------------
-// Default config — used as fallback when remote fetch fails
-// ---------------------------------------------------------------------------
 
 export const DEFAULT_ONBOARDING_CONFIG: OnboardingConfig = {
   schemaVersion: SCHEMA_VERSION,
   lastUpdated: '2026-05-19',
 
   steps: [
+    // ── Screen 1: Goals ──────────────────────────────────────────────────────
     {
       id: 'goals',
-      type: STEP_TYPES.MULTITEXT,
-      question: 'What health goals are most important to you right now?',
-      hint: 'You can add up to 3 goals.',
-      placeholder: 'e.g. Sleep better, manage stress…',
-      minItems: 1,
-      maxItems: 3,
+      type: STEP_TYPES.PILLS,
+      question: 'What health goals matter most to you right now?',
+      hint: 'Pick up to 3.',
       required: true,
+      multiSelect: true,
+      maxSelections: 3,
+      hasOther: true,
+      options: [
+        { value: 'lose_weight',    label: 'Lose weight' },
+        { value: 'sleep_better',   label: 'Sleep better' },
+        { value: 'reduce_stress',  label: 'Reduce stress' },
+        { value: 'eat_healthier',  label: 'Eat healthier' },
+        { value: 'more_active',    label: 'Get more active' },
+        { value: 'more_energy',    label: 'Boost energy' },
+        { value: 'mental_health',  label: 'Mental wellbeing' },
+        { value: 'build_strength', label: 'Build strength' },
+      ],
     },
+
+    // ── Screen 2: Lifestyle (group) ──────────────────────────────────────────
     {
-      id: 'physical_activity',
-      type: STEP_TYPES.TEXTAREA,
-      question: 'How would you describe your current level of physical activity?',
-      hint: 'Think about a typical week — what does movement look like for you?',
-      placeholder: 'e.g. I walk 20 minutes most days…',
-      maxLength: 400,
-      required: true,
-    },
-    {
-      id: 'sleep',
-      type: STEP_TYPES.TEXTAREA,
-      question: 'How has your sleep been lately?',
-      hint: 'Include anything that feels relevant — quality, duration, disruptions.',
-      placeholder: 'e.g. I get about 6 hours but wake up several times…',
-      maxLength: 400,
-      required: true,
-    },
-    {
-      id: 'stressors',
-      type: STEP_TYPES.TEXTAREA,
-      question: 'What are the main sources of stress in your life at the moment?',
-      hint: 'No detail is too small — this helps us tailor your coaching.',
-      placeholder: 'e.g. Work deadlines, family responsibilities…',
-      maxLength: 400,
-      required: false,
-    },
-    {
-      id: 'barriers',
-      type: STEP_TYPES.TEXTAREA,
-      question: 'What has made it difficult to reach your health goals in the past?',
-      hint: 'Be as honest as you like — this is just between you and your coach.',
-      placeholder: 'e.g. Lack of time, motivation dips…',
-      maxLength: 400,
-      required: true,
-    },
-    {
-      id: 'work_life_balance',
-      type: STEP_TYPES.SELECT,
-      question: 'How would you rate your current work–life balance?',
+      id: 'lifestyle',
+      type: STEP_TYPES.GROUP,
+      title: 'Your Lifestyle',
       hint: null,
       required: true,
-      options: [
-        { value: 'yes', label: 'Good — I feel balanced most of the time' },
-        { value: 'mostly', label: 'Mostly — some areas need attention' },
-        { value: 'no', label: 'Struggling — it needs significant work' },
+      subSteps: [
+        {
+          id: 'physical_activity',
+          type: STEP_TYPES.PILLS,
+          question: 'Current activity level',
+          hint: null,
+          required: true,
+          multiSelect: false,
+          hasOther: false,
+          options: [
+            { value: 'sedentary', label: 'Mostly sitting' },
+            { value: 'light',     label: 'Light activity' },
+            { value: 'moderate',  label: 'Moderately active' },
+            { value: 'active',    label: 'Very active' },
+            { value: 'athlete',   label: 'Athlete / intense' },
+          ],
+        },
+        {
+          id: 'sleep',
+          type: STEP_TYPES.PILLS,
+          question: 'How has your sleep been?',
+          hint: null,
+          required: true,
+          multiSelect: false,
+          hasOther: false,
+          options: [
+            { value: 'great',    label: 'Great — 7–9 hrs' },
+            { value: 'ok',       label: 'OK — 6–7 hrs' },
+            { value: 'poor',     label: 'Poor — under 6 hrs' },
+            { value: 'broken',   label: 'Broken / disrupted' },
+            { value: 'insomnia', label: 'Insomnia' },
+          ],
+        },
+        {
+          id: 'work_life_balance',
+          type: STEP_TYPES.PILLS,
+          question: 'Work–life balance',
+          hint: null,
+          required: true,
+          multiSelect: false,
+          hasOther: false,
+          options: [
+            { value: 'yes',    label: 'Good — I feel balanced' },
+            { value: 'mostly', label: 'Mostly balanced' },
+            { value: 'no',     label: 'Struggling' },
+          ],
+        },
+      ],
+    },
+
+    // ── Screen 3: Challenges (group) ─────────────────────────────────────────
+    {
+      id: 'challenges',
+      type: STEP_TYPES.GROUP,
+      title: 'Your Challenges',
+      hint: null,
+      required: true,
+      subSteps: [
+        {
+          id: 'stressors',
+          type: STEP_TYPES.PILLS,
+          question: 'Main sources of stress',
+          hint: 'Select all that apply.',
+          required: false,
+          multiSelect: true,
+          hasOther: true,
+          options: [
+            { value: 'work',          label: 'Work pressure' },
+            { value: 'finances',      label: 'Finances' },
+            { value: 'family',        label: 'Family' },
+            { value: 'health',        label: 'Health concerns' },
+            { value: 'social',        label: 'Social life' },
+            { value: 'relationships', label: 'Relationships' },
+          ],
+        },
+        {
+          id: 'barriers',
+          type: STEP_TYPES.PILLS,
+          question: 'What has held you back before?',
+          hint: 'Select all that apply.',
+          required: true,
+          multiSelect: true,
+          hasOther: true,
+          options: [
+            { value: 'time',       label: 'Lack of time' },
+            { value: 'motivation', label: 'Low motivation' },
+            { value: 'knowledge',  label: 'Not knowing how' },
+            { value: 'cost',       label: 'Cost' },
+            { value: 'injuries',   label: 'Injuries / health' },
+            { value: 'stress',     label: 'Too stressed' },
+          ],
+        },
       ],
     },
   ],
@@ -132,25 +204,25 @@ export const DEFAULT_ONBOARDING_CONFIG: OnboardingConfig = {
   wellnessWheel: {
     title: 'Your Wellness Wheel',
     instruction:
-      'For each area of life, score your current level of satisfaction from 0 (not at all) to 9 (completely satisfied). There are no right or wrong answers.',
-    scale: { min: 0, max: 9 },
+      'Score each area of life from 1 (not at all satisfied) to 10 (completely satisfied).',
+    scale: { min: 1, max: 10 },
     defaultScore: 5,
     reassessmentDays: 30,
     focusAreaCount: 3,
     miPromptTemplate:
-      "It looks like {area1} and {area2} are areas you'd like to explore more. What feels like the right first step for you?",
+      "It looks like {area1} and {area2} are areas you'd like to explore. What feels like the right first step?",
     segments: [
-      { id: 'nutrition',      label: 'Food & Nutrition',       shortLabel: 'Nutrition',    color: '#4CAF50' },
-      { id: 'sleep',          label: 'Sleep & Rest',           shortLabel: 'Sleep',        color: '#3F51B5' },
-      { id: 'physical',       label: 'Physical Fitness',       shortLabel: 'Fitness',      color: '#FF5722' },
-      { id: 'emotional',      label: 'Psych & Emotional',      shortLabel: 'Emotional',    color: '#9C27B0' },
-      { id: 'career',         label: 'Career & Professional',  shortLabel: 'Career',       color: '#FF9800' },
-      { id: 'spirituality',   label: 'Spirituality',           shortLabel: 'Spiritual',    color: '#00BCD4' },
-      { id: 'environment',    label: 'Environmental',          shortLabel: 'Environment',  color: '#8BC34A' },
-      { id: 'social',         label: 'Social & Cultural',      shortLabel: 'Social',       color: '#E91E63' },
-      { id: 'intellectual',   label: 'Intellectual',           shortLabel: 'Intellect',    color: '#009688' },
-      { id: 'relationships',  label: 'Relationships & Family', shortLabel: 'Relationships',color: '#F44336' },
-      { id: 'leisure',        label: 'Leisure',                shortLabel: 'Leisure',      color: '#795548' },
+      { id: 'nutrition',     label: 'Food & Nutrition',       shortLabel: 'Nutrition',     color: '#4CAF50' },
+      { id: 'sleep',         label: 'Sleep & Rest',           shortLabel: 'Sleep',         color: '#3F51B5' },
+      { id: 'physical',      label: 'Physical Fitness',       shortLabel: 'Fitness',       color: '#FF5722' },
+      { id: 'emotional',     label: 'Psych & Emotional',      shortLabel: 'Emotional',     color: '#9C27B0' },
+      { id: 'career',        label: 'Career & Professional',  shortLabel: 'Career',        color: '#FF9800' },
+      { id: 'spirituality',  label: 'Spirituality',           shortLabel: 'Spiritual',     color: '#00BCD4' },
+      { id: 'environment',   label: 'Environmental',          shortLabel: 'Environment',   color: '#8BC34A' },
+      { id: 'social',        label: 'Social & Cultural',      shortLabel: 'Social',        color: '#E91E63' },
+      { id: 'intellectual',  label: 'Intellectual',           shortLabel: 'Intellect',     color: '#009688' },
+      { id: 'relationships', label: 'Relationships & Family', shortLabel: 'Relationships', color: '#F44336' },
+      { id: 'leisure',       label: 'Leisure',                shortLabel: 'Leisure',       color: '#795548' },
     ],
   },
 };

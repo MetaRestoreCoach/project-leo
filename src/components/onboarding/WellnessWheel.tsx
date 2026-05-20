@@ -244,7 +244,7 @@ const styles = StyleSheet.create({
   },
   slider: {
     width: '100%',
-    height: 32,
+    height: 44,
   },
   miPromptBox: {
     marginTop: Spacing.md,
