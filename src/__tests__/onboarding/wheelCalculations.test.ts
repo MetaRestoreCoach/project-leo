@@ -16,7 +16,8 @@ import {
   buildMIPrompt,
   averageScore,
 } from '@/utils/wheelCalculations';
-import type { WheelSegment, Scale } from '@/config/onboardingConfig';
+import type { WheelSegment } from '@/config/onboardingConfig';
+import type { Scale } from '@/utils/wheelCalculations';
 
 const SCALE: Scale = { min: 0, max: 9 };
 

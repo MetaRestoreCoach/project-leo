@@ -7,10 +7,11 @@
 
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
-import Svg, { Polygon, Circle, Line, Text as SvgText, G } from 'react-native-svg';
+import Svg, { Polygon, Circle, Line, Text as SvgText } from 'react-native-svg';
 import Slider from '@react-native-community/slider';
 
-import type { WheelSegment, Scale } from '@/config/onboardingConfig';
+import type { WheelSegment } from '@/config/onboardingConfig';
+import type { Scale } from '@/utils/wheelCalculations';
 import {
   polarToCartesian,
   segmentMidAngle,
@@ -102,7 +103,7 @@ export function WellnessWheel({
       <Svg
         width={size}
         height={size}
-        accessibilityRole="img"
+        accessibilityRole="image"
         accessibilityLabel="Wellness wheel"
       >
         {/* Grid rings */}
