@@ -60,15 +60,20 @@ export default function DashboardScreen() {
     if (!session) return; // still initializing
 
     window.localStorage.removeItem(GFIT_PENDING_KEY);
-    const providerToken = session.provider_token;
-    if (!providerToken) {
-      setGfitError('Google Fit not authorized — fitness scopes may not be approved on the OAuth consent screen.');
+
+    // In Supabase, the access_token in the session is what we use for Google Fit API calls
+    const accessToken = session.access_token;
+    console.log('[GoogleFit] Access token available:', !!accessToken);
+    console.log('[GoogleFit] Provider token available:', !!session.provider_token);
+
+    if (!accessToken) {
+      setGfitError('Google Fit not authorized — please sign in with Google again.');
       return;
     }
 
-    fetchGoogleFitSummary(providerToken).then((data) => {
+    fetchGoogleFitSummary(accessToken).then((data) => {
       if (!data) {
-        setGfitError('Failed to fetch Google Fit data. Verify the Fitness API is enabled for this OAuth client in Google Cloud.');
+        setGfitError('Failed to fetch Google Fit data. Verify scopes were approved during sign-in.');
         return;
       }
       setGfitError(null);

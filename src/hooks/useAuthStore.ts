@@ -42,9 +42,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         const code = new URLSearchParams(window.location.search).get('code');
         if (code) {
           try {
-            await supabase.auth.exchangeCodeForSession(window.location.href);
-          } catch {
-            // exchange failed — onAuthStateChange will handle the null session
+            await supabase.auth.exchangeCodeForSession(code);
+          } catch (e) {
+            console.warn('OAuth code exchange failed:', e);
           }
         }
       }

@@ -13,6 +13,8 @@ export async function fetchGoogleFitSummary(accessToken: string): Promise<DailyH
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
 
+    console.log('[GoogleFit] Fetching with token:', accessToken?.substring(0, 20) + '...');
+
     const res = await fetch(
       'https://www.googleapis.com/fitness/v1/users/me/dataset:aggregate',
       {
@@ -35,14 +37,18 @@ export async function fetchGoogleFitSummary(accessToken: string): Promise<DailyH
       },
     );
 
+    console.log('[GoogleFit] Response status:', res.status);
     if (!res.ok) {
-      console.warn('Google Fit API error:', res.status, await res.text());
+      const errorText = await res.text();
+      console.warn('[GoogleFit] API error:', res.status, errorText);
       return null;
     }
 
-    return parseAggregate(await res.json());
+    const data = await res.json();
+    console.log('[GoogleFit] Response data:', data);
+    return parseAggregate(data);
   } catch (e) {
-    console.warn('Google Fit fetch error:', e);
+    console.warn('[GoogleFit] Fetch error:', e);
     return null;
   }
 }

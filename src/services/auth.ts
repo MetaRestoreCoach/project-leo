@@ -51,9 +51,19 @@ export async function signInWithGoogle() {
 
   // Web: redirect back to the app root — index.tsx detects ?code= and exchanges it.
   // Native: deep-link back into the app, then exchange the code manually.
-  const redirectTo = Platform.OS === 'web'
+  let redirectTo = Platform.OS === 'web'
     ? window.location.origin
     : makeRedirectUri({ scheme: 'projectleo' });
+
+  // Development: force localhost redirect if running on a dev port
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    if (isDev) {
+      redirectTo = `http://${window.location.hostname}:${window.location.port || 8083}`;
+    }
+  }
+
+  console.log('[OAuth] signInWithGoogle redirectTo:', redirectTo);
 
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
@@ -64,7 +74,12 @@ export async function signInWithGoogle() {
     },
   });
 
-  if (error) throw error;
+  if (error) {
+    console.error('[OAuth] signInWithGoogle error:', error);
+    throw error;
+  }
+
+  console.log('[OAuth] OAuth URL:', data.url);
 
   // Native: open the OAuth URL in an in-app browser then exchange the PKCE code.
   if (Platform.OS !== 'web' && data.url) {
@@ -86,26 +101,36 @@ export async function signInWithGoogle() {
 export async function signInWithGoogleFitScopes() {
   if (Platform.OS !== 'web') loadAuthModules();
 
-  const redirectTo = Platform.OS === 'web'
+  let redirectTo = Platform.OS === 'web'
     ? window.location.origin
     : makeRedirectUri({ scheme: 'projectleo' });
+
+  // Development: force localhost redirect if running on a dev port
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    if (isDev) {
+      redirectTo = `http://${window.location.hostname}:${window.location.port || 8083}`;
+    }
+  }
+
+  console.log('[OAuth] signInWithGoogleFitScopes - requesting fitness scopes');
 
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
       redirectTo,
       skipBrowserRedirect: Platform.OS !== 'web',
-      scopes: [
-        'https://www.googleapis.com/auth/fitness.activity.read',
-        'https://www.googleapis.com/auth/fitness.body.read',
-        'https://www.googleapis.com/auth/fitness.heart_rate.read',
-        'https://www.googleapis.com/auth/fitness.sleep.read',
-      ].join(' '),
+      scopes: 'openid email profile https://www.googleapis.com/auth/fitness.activity.read https://www.googleapis.com/auth/fitness.body.read https://www.googleapis.com/auth/fitness.heart_rate.read https://www.googleapis.com/auth/fitness.sleep.read',
       queryParams: { access_type: 'offline', prompt: 'consent' },
     },
   });
 
-  if (error) throw error;
+  if (error) {
+    console.error('[OAuth] signInWithGoogleFitScopes error:', error);
+    throw error;
+  }
+
+  console.log('[OAuth] OAuth URL for Fitness:', data.url?.substring(0, 100) + '...');
 
   if (Platform.OS !== 'web' && data.url) {
     const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
@@ -124,9 +149,17 @@ export async function signInWithGoogleFitScopes() {
 export async function signInWithApple() {
   loadAuthModules();
 
-  const redirectTo = Platform.OS === 'web'
+  let redirectTo = Platform.OS === 'web'
     ? window.location.origin
     : makeRedirectUri({ scheme: 'projectleo' });
+
+  // Development: force localhost redirect if running on a dev port
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    if (isDev) {
+      redirectTo = `http://${window.location.hostname}:${window.location.port || 8083}`;
+    }
+  }
 
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'apple',
