@@ -12,7 +12,9 @@ interface Integration {
   color: string;
   description: string;
   iosOnly?: boolean;
-  note?: string; // If set, tapping shows this info instead of connect flow
+  androidOnly?: boolean;
+  comingSoon?: boolean;
+  note?: string;
 }
 
 const INTEGRATIONS: Integration[] = [
@@ -22,6 +24,7 @@ const INTEGRATIONS: Integration[] = [
     icon: 'heart-circle-outline',
     color: '#FF2D55',
     description: 'Steps, heart rate, sleep & more',
+    iosOnly: true,
   },
   {
     id: 'google_fit',
@@ -29,14 +32,7 @@ const INTEGRATIONS: Integration[] = [
     icon: 'fitness-outline',
     color: '#4285F4',
     description: 'Activity & fitness tracking',
-  },
-  {
-    id: 'myfitnesspal',
-    name: 'MyFitnessPal',
-    icon: 'restaurant-outline',
-    color: '#00B0FF',
-    description: 'Nutrition & food logging',
-    note: 'MyFitnessPal retired their public API in 2020. Use the in-app food logging feature to track nutrition manually.',
+    androidOnly: false, // also available on web
   },
   {
     id: 'strava',
@@ -44,6 +40,30 @@ const INTEGRATIONS: Integration[] = [
     icon: 'bicycle-outline',
     color: '#FC4C02',
     description: 'Running, cycling & workouts',
+  },
+  {
+    id: 'garmin',
+    name: 'Garmin Connect',
+    icon: 'watch-outline',
+    color: '#007CC2',
+    description: 'Steps, heart rate, sleep, Body Battery',
+    comingSoon: true,
+  },
+  {
+    id: 'fitbit',
+    name: 'Fitbit',
+    icon: 'pulse-outline',
+    color: '#00B0B9',
+    description: 'Steps, sleep, heart rate & weight',
+    comingSoon: true,
+  },
+  {
+    id: 'myfitnesspal',
+    name: 'MyFitnessPal',
+    icon: 'restaurant-outline',
+    color: '#00B0FF',
+    description: 'Nutrition & food logging',
+    note: 'MyFitnessPal retired their public API in 2020. Use the in-app food logging to track nutrition.',
   },
 ];
 
@@ -54,6 +74,8 @@ interface Props {
 
 export function ConnectDataSourceCard({ connectedIds = [], onConnect }: Props) {
   const handleConnect = (integration: Integration) => {
+    if (integration.comingSoon) return;
+
     const isIosOnly = !!(integration.iosOnly && Platform.OS !== 'ios');
     if (isIosOnly || connectedIds.includes(integration.id)) return;
 
@@ -66,8 +88,7 @@ export function ConnectDataSourceCard({ connectedIds = [], onConnect }: Props) {
       return;
     }
 
-    // On web, Alert.alert maps to window.confirm() which browsers block after redirects.
-    // Call onConnect directly — the OAuth redirect itself is the confirmation step.
+    // On web, call onConnect directly — the OAuth redirect is the confirmation.
     if (Platform.OS === 'web') {
       onConnect(integration.id);
       return;
@@ -75,13 +96,19 @@ export function ConnectDataSourceCard({ connectedIds = [], onConnect }: Props) {
 
     Alert.alert(
       `Connect ${integration.name}`,
-      `Linking ${integration.name} will import your health data and replace sample metrics on your dashboard.`,
+      `Linking ${integration.name} will import your health data and replace demo metrics on your dashboard.`,
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Connect', onPress: () => onConnect(integration.id) },
       ],
     );
   };
+
+  // Filter: hide Apple Health on non-iOS, show everything else
+  const visibleIntegrations = INTEGRATIONS.filter((i) => {
+    if (i.iosOnly && Platform.OS !== 'ios') return false;
+    return true;
+  });
 
   return (
     <View style={styles.card}>
@@ -90,35 +117,57 @@ export function ConnectDataSourceCard({ connectedIds = [], onConnect }: Props) {
           <Ionicons name="link-outline" size={18} color={Colors.primary} />
         </View>
         <View style={styles.headerText}>
-          <Text style={styles.title}>Connect Your Health Data</Text>
-          <Text style={styles.subtitle}>Replace sample metrics with real data from your apps.</Text>
+          <Text style={styles.title}>Connect Health Data</Text>
+          <Text style={styles.subtitle}>Sync real data from your apps and wearables.</Text>
         </View>
       </View>
 
       <View style={styles.grid}>
-        {INTEGRATIONS.map((integration) => {
+        {visibleIntegrations.map((integration) => {
           const connected = connectedIds.includes(integration.id);
-          const isIosOnly = !!(integration.iosOnly && Platform.OS !== 'ios');
           const isUnavailable = !!integration.note;
-          const pillLabel = connected ? '✓ Connected' : isIosOnly ? 'iOS only' : isUnavailable ? 'Info' : 'Connect';
+          const isSoon = !!integration.comingSoon;
+
+          let pillLabel = 'Connect';
+          if (connected) pillLabel = '✓ Connected';
+          else if (isSoon) pillLabel = 'Soon';
+          else if (isUnavailable) pillLabel = 'Info';
 
           return (
             <TouchableOpacity
               key={integration.id}
-              style={[styles.item, connected && styles.itemConnected, isIosOnly && styles.itemDisabled]}
+              style={[
+                styles.item,
+                connected && styles.itemConnected,
+                isSoon && styles.itemDisabled,
+              ]}
               onPress={() => handleConnect(integration)}
-              activeOpacity={isIosOnly ? 1 : 0.75}
-              disabled={isIosOnly}
+              activeOpacity={isSoon ? 1 : 0.75}
+              disabled={isSoon}
             >
-              <View style={[styles.iconWrap, { backgroundColor: integration.color + (isIosOnly ? '0C' : '18') }]}>
-                <Ionicons name={integration.icon} size={22} color={isIosOnly ? Colors.textTertiary : integration.color} />
+              <View style={[styles.iconWrap, { backgroundColor: integration.color + (isSoon ? '0C' : '18') }]}>
+                <Ionicons
+                  name={integration.icon}
+                  size={22}
+                  color={isSoon ? Colors.textTertiary : integration.color}
+                />
               </View>
-              <Text style={[styles.itemName, isIosOnly && styles.textDisabled]}>{integration.name}</Text>
+              <Text style={[styles.itemName, isSoon && styles.textDisabled]}>{integration.name}</Text>
               <Text style={styles.itemDesc} numberOfLines={2}>
-                {isIosOnly ? 'Available on iPhone only' : integration.description}
+                {integration.description}
               </Text>
-              <View style={[styles.pill, connected && styles.pillConnected, (isIosOnly || isUnavailable) && styles.pillGhost]}>
-                <Text style={[styles.pillText, connected && styles.pillTextConnected, (isIosOnly || isUnavailable) && styles.pillTextGhost]}>
+              <View style={[
+                styles.pill,
+                connected && styles.pillConnected,
+                isSoon && styles.pillSoon,
+                (isUnavailable && !connected && !isSoon) && styles.pillGhost,
+              ]}>
+                <Text style={[
+                  styles.pillText,
+                  connected && styles.pillTextConnected,
+                  isSoon && styles.pillTextSoon,
+                  (isUnavailable && !connected && !isSoon) && styles.pillTextGhost,
+                ]}>
                   {pillLabel}
                 </Text>
               </View>
@@ -134,8 +183,8 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: Colors.surface,
     borderRadius: BorderRadius.lg,
-    borderWidth: 1.5,
-    borderColor: Colors.primary + '30',
+    borderWidth: 1,
+    borderColor: Colors.border,
     padding: Spacing.md,
     ...Shadow.sm,
   },
@@ -181,8 +230,11 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   itemConnected: {
-    borderColor: Colors.success + '60',
-    backgroundColor: Colors.success + '08',
+    borderColor: Colors.success + '50',
+    backgroundColor: Colors.success + '06',
+  },
+  itemDisabled: {
+    opacity: 0.6,
   },
   iconWrap: {
     width: 38,
@@ -196,6 +248,9 @@ const styles = StyleSheet.create({
     fontSize: FontSize.sm,
     fontWeight: FontWeight.semibold,
     color: Colors.textPrimary,
+  },
+  textDisabled: {
+    color: Colors.textTertiary,
   },
   itemDesc: {
     fontSize: FontSize.xs,
@@ -213,26 +268,20 @@ const styles = StyleSheet.create({
   pillConnected: {
     backgroundColor: Colors.success,
   },
-  pillText: {
-    fontSize: FontSize.xs,
-    fontWeight: FontWeight.semibold,
-    color: Colors.white,
-  },
-  pillTextConnected: {
-    color: Colors.white,
+  pillSoon: {
+    backgroundColor: Colors.textTertiary + '30',
   },
   pillGhost: {
     backgroundColor: 'transparent',
     borderWidth: 1,
     borderColor: Colors.border,
   },
-  pillTextGhost: {
-    color: Colors.textTertiary,
+  pillText: {
+    fontSize: FontSize.xs,
+    fontWeight: FontWeight.semibold,
+    color: Colors.white,
   },
-  itemDisabled: {
-    opacity: 0.5,
-  },
-  textDisabled: {
-    color: Colors.textTertiary,
-  },
+  pillTextConnected: { color: Colors.white },
+  pillTextSoon: { color: Colors.textTertiary },
+  pillTextGhost: { color: Colors.textTertiary },
 });

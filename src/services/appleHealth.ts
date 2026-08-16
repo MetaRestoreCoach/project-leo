@@ -151,38 +151,43 @@ export interface ConnectedService {
   dataTypes: string[];
 }
 
-export function getConnectedServices(): ConnectedService[] {
+/**
+ * Returns the list of supported integrations with live connection status.
+ * Pass the connectedIds array from dashboard state to reflect real-time status.
+ */
+export function getConnectedServices(connectedIds: string[] = []): ConnectedService[] {
+  const now = new Date().toISOString();
   return [
     {
       id: 'apple_health',
       name: 'Apple Health',
       icon: 'heart-circle-outline',
-      connected: Platform.OS === 'ios', // Auto-connected on iOS
-      lastSync: Platform.OS === 'ios' ? new Date().toISOString() : null,
+      connected: Platform.OS === 'ios' || connectedIds.includes('apple_health'),
+      lastSync: (Platform.OS === 'ios' || connectedIds.includes('apple_health')) ? now : null,
       dataTypes: ['Steps', 'Heart Rate', 'Sleep', 'Blood Oxygen', 'Workouts'],
     },
     {
       id: 'strava',
       name: 'Strava',
       icon: 'bicycle-outline',
-      connected: false, // Requires OAuth setup
-      lastSync: null,
+      connected: connectedIds.includes('strava'),
+      lastSync: connectedIds.includes('strava') ? now : null,
       dataTypes: ['Running', 'Cycling', 'Swimming', 'Workouts'],
     },
     {
       id: 'garmin',
       name: 'Garmin Connect',
       icon: 'watch-outline',
-      connected: false, // Requires OAuth setup
-      lastSync: null,
+      connected: connectedIds.includes('garmin'),
+      lastSync: connectedIds.includes('garmin') ? now : null,
       dataTypes: ['Steps', 'Heart Rate', 'Sleep', 'Stress', 'Body Battery'],
     },
     {
       id: 'google_fit',
       name: 'Google Fit',
       icon: 'fitness-outline',
-      connected: false,
-      lastSync: null,
+      connected: connectedIds.includes('google_fit'),
+      lastSync: connectedIds.includes('google_fit') ? now : null,
       dataTypes: ['Steps', 'Heart Rate', 'Sleep', 'Workouts'],
     },
   ];

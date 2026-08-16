@@ -7,7 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Input } from '@/components/common/Input';
 import { Button } from '@/components/common/Button';
 import { signUpWithEmail, signInWithGoogle, signInWithApple } from '@/services/auth';
-import { Colors, Spacing, FontSize, FontWeight, BorderRadius } from '@/constants/theme';
+import { Colors, Spacing, FontSize, FontWeight, BorderRadius, Shadow } from '@/constants/theme';
 
 export default function SignUpScreen() {
   const router = useRouter();
@@ -76,6 +76,9 @@ export default function SignUpScreen() {
       >
         <View style={[styles.card, isWide && styles.cardWide]}>
           <View style={styles.header}>
+            <View style={styles.logoMark}>
+              <Ionicons name="fitness" size={28} color={Colors.white} />
+            </View>
             <Text style={styles.title}>Create Account</Text>
             <Text style={styles.subtitle}>Start your health coaching journey</Text>
           </View>
@@ -85,16 +88,37 @@ export default function SignUpScreen() {
             <Button
               title="Sign up with Google"
               onPress={async () => {
-                try { await signInWithGoogle(); if (Platform.OS !== 'web') router.replace('/(tabs)/dashboard'); } catch {}
+                setLoading(true);
+                setError('');
+                try {
+                  await signInWithGoogle();
+                  // Web: browser redirects away; index.tsx handles routing on return.
+                  // Native: route through index.tsx so onboarding/dashboard check runs.
+                  if (Platform.OS !== 'web') router.replace('/');
+                } catch (err: any) {
+                  setError(err.message || 'Google sign-up failed.');
+                } finally {
+                  setLoading(false);
+                }
               }}
               variant="outline"
+              loading={loading}
               icon={<Ionicons name="logo-google" size={20} color={Colors.primary} />}
             />
             {Platform.OS === 'ios' && (
               <Button
                 title="Sign up with Apple"
                 onPress={async () => {
-                  try { await signInWithApple(); if (Platform.OS !== 'web') router.replace('/(tabs)/dashboard'); } catch {}
+                  setLoading(true);
+                  setError('');
+                  try {
+                    await signInWithApple();
+                    if (Platform.OS !== 'web') router.replace('/');
+                  } catch (err: any) {
+                    setError(err.message || 'Apple sign-up failed.');
+                  } finally {
+                    setLoading(false);
+                  }
                 }}
                 variant="secondary"
                 icon={<Ionicons name="logo-apple" size={20} color={Colors.textPrimary} />}
@@ -180,17 +204,26 @@ const styles = StyleSheet.create({
   card: { width: '100%' },
   cardWide: {
     maxWidth: 440, backgroundColor: Colors.surface, borderRadius: BorderRadius.xl,
-    padding: Spacing.xl, shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08, shadowRadius: 24, elevation: 8,
+    padding: Spacing.xl, ...Shadow.lg,
   },
   header: { alignItems: 'center', marginBottom: Spacing.xl },
-  title: { fontSize: FontSize.xxl, fontWeight: FontWeight.bold, color: Colors.textPrimary },
-  subtitle: { fontSize: FontSize.md, color: Colors.textSecondary, marginTop: Spacing.xs },
+  logoMark: {
+    width: 60, height: 60, borderRadius: 18,
+    backgroundColor: Colors.primary,
+    justifyContent: 'center', alignItems: 'center',
+    marginBottom: Spacing.md, ...Shadow.md,
+  },
+  title: { fontSize: FontSize.xxl, fontWeight: FontWeight.bold, color: Colors.textPrimary, letterSpacing: -0.5 },
+  subtitle: { fontSize: FontSize.sm, color: Colors.textTertiary, marginTop: 4 },
   socialButtons: { gap: Spacing.sm, marginBottom: Spacing.lg },
   divider: { flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.lg },
   dividerLine: { flex: 1, height: 1, backgroundColor: Colors.border },
   dividerText: { marginHorizontal: Spacing.md, fontSize: FontSize.sm, color: Colors.textTertiary },
-  error: { color: Colors.error, fontSize: FontSize.sm, textAlign: 'center', marginBottom: Spacing.md },
+  error: {
+    color: Colors.error, fontSize: FontSize.sm, textAlign: 'center', marginBottom: Spacing.md,
+    paddingHorizontal: Spacing.sm, paddingVertical: Spacing.sm,
+    backgroundColor: Colors.error + '10', borderRadius: BorderRadius.sm,
+  },
   terms: { fontSize: FontSize.xs, color: Colors.textTertiary, textAlign: 'center', marginTop: Spacing.md },
   footer: { flexDirection: 'row', justifyContent: 'center', marginTop: Spacing.lg },
   footerText: { fontSize: FontSize.sm, color: Colors.textSecondary },

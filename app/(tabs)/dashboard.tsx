@@ -9,10 +9,20 @@ import { CoachingCard } from '@/components/dashboard/CoachingCard';
 import { GoalProgress } from '@/components/dashboard/GoalProgress';
 import { ConnectDataSourceCard } from '@/components/dashboard/ConnectDataSourceCard';
 import { Card } from '@/components/common/Card';
-import { Colors, Spacing, FontSize, FontWeight, BorderRadius } from '@/constants/theme';
+import { Colors, Spacing, FontSize, FontWeight, BorderRadius, Shadow } from '@/constants/theme';
 import { getTodaysSummary, DailyHealthSummary } from '@/services/appleHealth';
 import { fetchGoogleFitSummary } from '@/services/googleFit';
 import { signInWithGoogleFitScopes } from '@/services/auth';
+import {
+  buildStravaOAuthUrl,
+  getWebRedirectUri,
+  exchangeStravaCode,
+  fetchStravaSummary,
+  isStravaConnected,
+  connectStravaNative,
+  STRAVA_PENDING_KEY,
+  STRAVA_CODE_KEY,
+} from '@/services/strava';
 import { Ionicons } from '@expo/vector-icons';
 
 const DEMO_COACHING = "Based on your recent data, your post-meal blood glucose tends to spike after lunch. Try adding a 15-minute walk after your midday meal — studies show this can reduce post-prandial glucose by 20-30%. Your sleep has also improved, which is great for insulin sensitivity. This week, focus on increasing fiber intake at breakfast.";
@@ -39,6 +49,7 @@ export default function DashboardScreen() {
   const [healthData, setHealthData] = useState<DailyHealthSummary | null>(null);
   const [connectedSources, setConnectedSources] = React.useState<string[]>([]);
   const [gfitError, setGfitError] = useState<string | null>(null);
+  const [stravaError, setStravaError] = useState<string | null>(null);
 
   const loadHealthData = async () => {
     try {
@@ -61,25 +72,70 @@ export default function DashboardScreen() {
 
     window.localStorage.removeItem(GFIT_PENDING_KEY);
 
-    // In Supabase, the access_token in the session is what we use for Google Fit API calls
-    const accessToken = session.access_token;
-    console.log('[GoogleFit] Access token available:', !!accessToken);
-    console.log('[GoogleFit] Provider token available:', !!session.provider_token);
+    // provider_token is Google's OAuth access token — required for Google Fit API calls.
+    // session.access_token is Supabase's JWT and is rejected by Google's APIs.
+    const googleAccessToken = session.provider_token;
+    console.log('[GoogleFit] Provider token available:', !!googleAccessToken);
 
-    if (!accessToken) {
-      setGfitError('Google Fit not authorized — please sign in with Google again.');
+    if (!googleAccessToken) {
+      setGfitError('Google Fit: no provider token. Please disconnect and reconnect — make sure to approve all fitness scopes.');
       return;
     }
 
-    fetchGoogleFitSummary(accessToken).then((data) => {
+    fetchGoogleFitSummary(googleAccessToken).then((data) => {
       if (!data) {
-        setGfitError('Failed to fetch Google Fit data. Verify scopes were approved during sign-in.');
+        setGfitError('Google Fit: could not read data. Make sure fitness permissions were granted during sign-in.');
         return;
       }
       setGfitError(null);
       setConnectedSources((prev) => prev.includes('google_fit') ? prev : [...prev, 'google_fit']);
       setHealthData(data);
     });
+  }, [session]);
+
+  // On mount: restore Strava connected state from DB (persists across app reloads)
+  useEffect(() => {
+    isStravaConnected().then((connected) => {
+      if (connected) {
+        setConnectedSources((prev) => prev.includes('strava') ? prev : [...prev, 'strava']);
+      }
+    });
+  }, []);
+
+  // Handle return from Strava OAuth (web only).
+  // useAuthStore.initialize() stashes the Strava code (or error) in localStorage
+  // and cleans the URL before routing here. We pick it up once session is confirmed.
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    if (!session) return;
+
+    // Handle error return from Strava (e.g. user denied access)
+    const stravaOAuthError = window.localStorage.getItem('strava_error');
+    if (stravaOAuthError) {
+      window.localStorage.removeItem('strava_error');
+      setStravaError(stravaOAuthError);
+      return;
+    }
+
+    const pendingFlag = window.localStorage.getItem(STRAVA_PENDING_KEY);
+    const stravaCode = window.localStorage.getItem(STRAVA_CODE_KEY);
+    if (pendingFlag !== '1' || !stravaCode) return;
+
+    window.localStorage.removeItem(STRAVA_PENDING_KEY);
+    window.localStorage.removeItem(STRAVA_CODE_KEY);
+
+    exchangeStravaCode(stravaCode)
+      .then(() => {
+        setStravaError(null);
+        setConnectedSources((prev) => prev.includes('strava') ? prev : [...prev, 'strava']);
+        return fetchStravaSummary();
+      })
+      .then((data) => {
+        if (data) setHealthData(data);
+      })
+      .catch((e: any) => {
+        setStravaError(`Strava connection failed: ${e?.message ?? 'unknown error'}`);
+      });
   }, [session]);
 
   const onRefresh = async () => {
@@ -101,6 +157,32 @@ export default function DashboardScreen() {
         return; // page redirects to Google OAuth on success
       }
     }
+
+    if (id === 'strava') {
+      setStravaError(null);
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        // Web: full-page redirect to Strava OAuth.
+        // useAuthStore.initialize() will detect the callback and stash the code.
+        const redirectUri = getWebRedirectUri();
+        const oauthUrl = buildStravaOAuthUrl(redirectUri);
+        window.localStorage.setItem(STRAVA_PENDING_KEY, '1');
+        window.location.href = oauthUrl;
+        return;
+      }
+      // Native (iOS / Android): open in-app browser and handle deep-link return
+      try {
+        const result = await connectStravaNative();
+        if (result) {
+          setConnectedSources((prev) => prev.includes('strava') ? prev : [...prev, 'strava']);
+          const data = await fetchStravaSummary();
+          if (data) setHealthData(data);
+        }
+      } catch (e: any) {
+        setStravaError(`Strava connection failed: ${e?.message ?? 'unknown error'}`);
+      }
+      return;
+    }
+
     setConnectedSources((prev) => [...prev, id]);
     if (id === 'apple_health') {
       loadHealthData();
@@ -131,12 +213,12 @@ export default function DashboardScreen() {
             <UserAvatar
               name={displayName}
               avatarUrl={avatarUrl}
-              size={48}
+              size={44}
               borderColor={Colors.primary}
             />
             <View style={styles.greetingText}>
-              <Text style={styles.greetingHeadline}>Good {timeOfDay}, {firstName}</Text>
-              <Text style={styles.greetingSub}>Here's your health snapshot</Text>
+              <Text style={styles.greetingHeadline}>Good {timeOfDay}, {firstName} 👋</Text>
+              <Text style={styles.greetingSub}>{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</Text>
             </View>
           </View>
         </View>
@@ -150,6 +232,12 @@ export default function DashboardScreen() {
           <View style={styles.gfitErrorBanner} accessibilityRole="alert">
             <Ionicons name="alert-circle" size={18} color={Colors.error} />
             <Text style={styles.gfitErrorText}>{gfitError}</Text>
+          </View>
+        )}
+        {stravaError && (
+          <View style={styles.gfitErrorBanner} accessibilityRole="alert">
+            <Ionicons name="alert-circle" size={18} color={Colors.error} />
+            <Text style={styles.gfitErrorText}>{stravaError}</Text>
           </View>
         )}
 
@@ -245,11 +333,11 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   content: { padding: Spacing.md, gap: Spacing.md },
   contentWide: { maxWidth: 800, alignSelf: 'center', width: '100%' },
-  greeting: { marginBottom: Spacing.xs },
-  greetingRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
+  greeting: { marginBottom: 2, paddingVertical: Spacing.sm },
+  greetingRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   greetingText: { flex: 1 },
-  greetingHeadline: { fontSize: FontSize.xl, fontWeight: FontWeight.bold, color: Colors.textPrimary },
-  greetingSub: { fontSize: FontSize.sm, color: Colors.textSecondary, marginTop: 2 },
+  greetingHeadline: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.textPrimary },
+  greetingSub: { fontSize: FontSize.xs, color: Colors.textTertiary, marginTop: 2 },
   scoreCard: { padding: Spacing.md },
   scoreRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   scoreLabel: { fontSize: FontSize.md, fontWeight: FontWeight.semibold, color: Colors.textPrimary },
@@ -260,10 +348,10 @@ const styles = StyleSheet.create({
   sourceRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: Spacing.xs },
   sourceText: { fontSize: FontSize.xs, color: Colors.textSecondary, flex: 1 },
   syncText: { fontSize: FontSize.xs, color: Colors.accent },
-  emptyState: { alignItems: 'center', paddingVertical: Spacing.xxl, gap: Spacing.sm },
+  emptyState: { alignItems: 'center', paddingVertical: Spacing.xxl * 1.5, gap: Spacing.sm },
   emptyTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.semibold, color: Colors.textSecondary },
-  emptyDesc: { fontSize: FontSize.sm, color: Colors.textTertiary, textAlign: 'center', maxWidth: 300, lineHeight: 20 },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: Spacing.sm },
+  emptyDesc: { fontSize: FontSize.sm, color: Colors.textTertiary, textAlign: 'center', maxWidth: 280, lineHeight: 22 },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: Spacing.xs },
   sectionTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.semibold, color: Colors.textPrimary },
   metricsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
   metricsGridWide: { gap: Spacing.md },

@@ -69,9 +69,13 @@ export type MetricType =
   | 'sleep_hours'
   | 'calories_consumed'
   | 'calories_burned'
-  | 'water_ml';
+  | 'water_ml'
+  // Strava-sourced activity metrics
+  | 'distance_km'
+  | 'workout_count'
+  | 'workout_duration_min';
 
-export type MetricSource = 'manual' | 'apple_health' | 'garmin' | 'fitbit' | 'google_fit';
+export type MetricSource = 'manual' | 'apple_health' | 'garmin' | 'fitbit' | 'google_fit' | 'strava';
 
 export interface HealthMetric {
   id: string;

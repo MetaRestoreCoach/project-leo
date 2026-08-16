@@ -7,7 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Input } from '@/components/common/Input';
 import { Button } from '@/components/common/Button';
 import { signInWithEmail, signInWithGoogle, signInWithApple } from '@/services/auth';
-import { Colors, Spacing, FontSize, FontWeight, BorderRadius } from '@/constants/theme';
+import { Colors, Spacing, FontSize, FontWeight, BorderRadius, Shadow } from '@/constants/theme';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -81,6 +81,9 @@ export default function LoginScreen() {
         <View style={[styles.card, isWide && styles.cardWide]}>
           {/* Header */}
           <View style={styles.header}>
+            <View style={styles.logoMark}>
+              <Ionicons name="fitness" size={28} color={Colors.white} />
+            </View>
             <Text style={styles.logo}>Project LEO</Text>
             <Text style={styles.tagline}>Your Health is Your Wealth</Text>
           </View>
@@ -161,90 +164,60 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  scroll: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    padding: Spacing.lg,
-  },
-  scrollWide: {
-    alignItems: 'center',
-  },
-  card: {
-    width: '100%',
-  },
+  container: { flex: 1, backgroundColor: Colors.background },
+  scroll: { flexGrow: 1, justifyContent: 'center', padding: Spacing.lg },
+  scrollWide: { alignItems: 'center' },
+  card: { width: '100%' },
   cardWide: {
     maxWidth: 440,
     backgroundColor: Colors.surface,
     borderRadius: BorderRadius.xl,
     padding: Spacing.xl,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 24,
-    elevation: 8,
+    ...Shadow.lg,
   },
-  header: {
-    alignItems: 'center',
-    marginBottom: Spacing.xl,
+  header: { alignItems: 'center', marginBottom: Spacing.xl },
+  logoMark: {
+    width: 60, height: 60, borderRadius: 18,
+    backgroundColor: Colors.primary,
+    justifyContent: 'center', alignItems: 'center',
+    marginBottom: Spacing.md,
+    ...Shadow.md,
   },
   logo: {
-    fontSize: FontSize.hero,
+    fontSize: FontSize.xxl,
     fontWeight: FontWeight.bold,
-    color: Colors.primary,
+    color: Colors.textPrimary,
+    letterSpacing: -0.5,
   },
   tagline: {
-    fontSize: FontSize.md,
-    color: Colors.textSecondary,
-    marginTop: Spacing.xs,
-  },
-  socialButtons: {
-    gap: Spacing.sm,
-    marginBottom: Spacing.lg,
-  },
-  socialButton: {
-    width: '100%',
-  },
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: Spacing.lg,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: Colors.border,
-  },
-  dividerText: {
-    marginHorizontal: Spacing.md,
     fontSize: FontSize.sm,
     color: Colors.textTertiary,
+    marginTop: 4,
+    letterSpacing: 0.2,
+  },
+  socialButtons: { gap: Spacing.sm, marginBottom: Spacing.lg },
+  socialButton: { width: '100%' },
+  divider: { flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.lg },
+  dividerLine: { flex: 1, height: 1, backgroundColor: Colors.borderLight },
+  dividerText: {
+    marginHorizontal: Spacing.md,
+    fontSize: FontSize.xs,
+    color: Colors.textTertiary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
   },
   error: {
     color: Colors.error,
     fontSize: FontSize.sm,
     textAlign: 'center',
     marginBottom: Spacing.md,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.sm,
+    backgroundColor: Colors.error + '10',
+    borderRadius: BorderRadius.sm,
   },
-  loginButton: {
-    marginTop: Spacing.sm,
-    marginBottom: Spacing.sm,
-  },
-  footer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginTop: Spacing.lg,
-  },
-  footerText: {
-    fontSize: FontSize.sm,
-    color: Colors.textSecondary,
-  },
-  footerLink: {
-    fontSize: FontSize.sm,
-    color: Colors.primary,
-    fontWeight: FontWeight.semibold,
-  },
+  loginButton: { marginTop: Spacing.sm, marginBottom: Spacing.sm },
+  footer: { flexDirection: 'row', justifyContent: 'center', marginTop: Spacing.lg },
+  footerText: { fontSize: FontSize.sm, color: Colors.textSecondary },
+  footerLink: { fontSize: FontSize.sm, color: Colors.primary, fontWeight: FontWeight.semibold },
 });

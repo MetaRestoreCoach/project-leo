@@ -38,9 +38,33 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // listener. Supabase's detectSessionInUrl runs lazily, so without this
       // INITIAL_SESSION fires with null before the exchange finishes and the
       // app redirects to login. Only runs when a code is present (no-op otherwise).
+      //
+      // IMPORTANT: Strava OAuth callbacks also include ?code= but they have
+      // state='strava_oauth' and a 'scope' param. We must NOT pass a Strava code
+      // to supabase.auth.exchangeCodeForSession — it would fail and could clear
+      // the PKCE verifier. Detect Strava callbacks first and stash the code for
+      // the dashboard to pick up instead.
       if (Platform.OS === 'web' && typeof window !== 'undefined') {
-        const code = new URLSearchParams(window.location.search).get('code');
-        if (code) {
+        const params = new URLSearchParams(window.location.search);
+        const code = params.get('code');
+        const scope = params.get('scope');   // Strava includes 'scope'; Supabase PKCE does NOT
+        const state = params.get('state');
+
+        const oauthError = params.get('error');
+        if (state === 'strava_oauth' && oauthError) {
+          // Strava denied access or there was an error — stash it for dashboard to display.
+          window.localStorage.setItem('strava_error', oauthError === 'access_denied'
+            ? 'Strava access was denied. Please try connecting again.'
+            : `Strava error: ${oauthError}`);
+          window.localStorage.removeItem('strava_pending'); // clear pending flag
+          window.history.replaceState({}, '', window.location.pathname);
+        } else if (code && state === 'strava_oauth') {
+          // Strava callback — stash code in localStorage for dashboard to handle,
+          // then clean the URL so it won't be re-processed on refresh.
+          window.localStorage.setItem('strava_pending_code', code);
+          window.history.replaceState({}, '', window.location.pathname);
+        } else if (code && !scope) {
+          // Supabase PKCE callback — exchange normally
           try {
             await supabase.auth.exchangeCodeForSession(code);
           } catch (e) {
